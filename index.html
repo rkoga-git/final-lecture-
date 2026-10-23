@@ -2779,21 +2779,28 @@ const goal = () => FEST ? 5 : DIFFS[state.diff].goal;
 // 学祭モードの異変：見ればわかる派手なものだけを、時間帯ごとに用意する（音だけ・文字を読む・気づきにくいものは出さない）
 //   学祭モードの 2限=昼 / 3限=夕方 / 4限=夜 / 5限=深夜
 const FEST_POOL = {
-  "昼":   ["desk", "board_tilt", "board_erased", "desk_missing"],
+  "昼":   ["desk", "board_tilt", "board_erased", "desk_missing", "flicker"],
   "夕方": ["bottles_all", "blinds_slam", "emergency_exit", "door_ajar"],
   "夜":   ["door_eye", "window_silhouette", "blackout", "footprints", "wall_text"],
   "深夜": ["attendance", "board"]
 };
 // 1回の受講で異変が出るのは2〜3コマ。最後の5限（深夜）は必ず異変、残りは2〜4限から選ぶ
+//  そのうち1コマは必ず「廊下の異変」にする（全員が、廊下を見て非常口から戻る体験と、暗い通路を通れるように）
+const isCorridorAnomaly = (id) => ANOMALIES.find(a => a.id === id)?.loc === "廊下";
 function planFest() {
   const n = Math.random() < 0.5 ? 2 : 3;
   const mid = [2, 3, 4].sort(() => Math.random() - 0.5).slice(0, n - 1);
   state.festPlan = new Set([...mid, 5]);
+  state.festCorr = mid[Math.floor(Math.random() * mid.length)];
   state.festSeen = new Set();
 }
 function pickFestAnomaly() {
   const band = lecturePeriod(state.lecture).band;
-  let pool = (FEST_POOL[band] || []).filter(id => id !== state.last && !(state.exclude && state.exclude.includes(id)));
+  const corr = state.lecture === state.festCorr;
+  // 廊下のコマは廊下の異変だけ、ほかのコマは教室・扉の異変だけ（廊下ばかりにならないように）
+  const base = (FEST_POOL[band] || []).filter(id => corr ? isCorridorAnomaly(id) : !isCorridorAnomaly(id));
+  let pool = base.filter(id => id !== state.last && !(state.exclude && state.exclude.includes(id)));
+  if (corr && !pool.length) pool = base.slice();   // 廊下の異変が1種しかない時間帯でやり直したときは、同じ異変をもう一度
   const fresh = pool.filter(id => !state.festSeen.has(id));   // 同じ受講の中では、なるべく同じ異変を2度出さない
   if (fresh.length) pool = fresh;
   if (!pool.length) return null;
@@ -2901,7 +2908,8 @@ function judge(forward) {
     state.miss++;
     if (FEST) {
       // 学祭モード：同じコマをやり直す（戻らない）。5限以外は、異変が出るかどうかも選び直す
-      if (state.lecture < 5) { if (Math.random() < 0.5) state.festPlan.add(state.lecture); else state.festPlan.delete(state.lecture); }
+      //  ただし「廊下の異変」のコマは、やり直しても廊下の異変のまま（必ず1回は体験できるように）
+      if (state.lecture < 5 && state.lecture !== state.festCorr) { if (Math.random() < 0.5) state.festPlan.add(state.lecture); else state.festPlan.delete(state.lecture); }
     } else {
       const back = DIFFS[state.diff].back;
       state.streak = back === Infinity ? 0 : Math.max(0, state.streak - back);
@@ -2912,7 +2920,8 @@ function judge(forward) {
 }
 const SPAWN = { x: ROOM.x1 - 0.8, z: -8, ry: Math.PI / 2 };   // 最上段の通路から教壇を見下ろす
 function resetRun() {
-  Object.assign(state, { lecture: 1, streak: 0, anomaly: null, judged: false, final: false, last: null, startedAt: performance.now(), periodStart: performance.now(), found: 0, miss: 0, festPlan: null, festSeen: null, epilogue: false });
+  Object.assign(state, { lecture: 1, streak: 0, anomaly: null, judged: false, final: false, last: null, startedAt: performance.now(), periodStart: performance.now(), found: 0, miss: 0, festPlan: null, festSeen: null, festCorr: null, epilogue: false });
+  Object.assign(PASS, { uses: 0, lastUse: -9, festDone: false });   // 暗い通路の怪異は受講ごとに数え直す（学祭は次の人にも起きるように）
   if (FEST) planFest();
   resetStory();
   resetClimax(); resetExit();
@@ -3362,7 +3371,7 @@ function exitWarp() {
 const PASS = { kind: null, t: 0, uses: 0, lastUse: -9, lastKind: null, festDone: false, step: 0 };
 function passageEvent() {
   PASS.uses++;
-  const p = FEST ? (PASS.festDone ? 0 : 0.6) : (state.lecture >= 3 && PASS.uses - PASS.lastUse >= 2 ? 0.4 : 0);
+  const p = FEST ? (PASS.festDone ? 0 : 1) : (state.lecture >= 3 && PASS.uses - PASS.lastUse >= 2 ? 0.4 : 0);   // 学祭モードは最初に通ったとき必ず
   if (DEBUG.passage) { PASS.kind = DEBUG.passage; } else if (Math.random() >= p) return;
   else PASS.kind = PASS.lastKind === "knock" ? "dark" : PASS.lastKind === "dark" ? "knock" : (Math.random() < 0.5 ? "knock" : "dark");
   PASS.t = 0; PASS.step = 0; PASS.lastUse = PASS.uses; PASS.lastKind = PASS.kind; if (FEST) PASS.festDone = true;
