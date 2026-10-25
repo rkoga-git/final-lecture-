@@ -828,15 +828,15 @@ function patch(mat, gk = 0.5, snap = true, lm = false, gloss = 0) {
       sh.vertexShader = "#define USE_GLOSS\nvarying vec3 vWorldG;\n" + sh.vertexShader.replace("#include <project_vertex>", "#include <project_vertex>\n vWorldG = (modelMatrix * vec4(transformed, 1.0)).xyz;");
     }
     if (lm) {
-      sh.uniforms.tLM0 = LM_U.t0; sh.uniforms.tLM1 = LM_U.t1; sh.uniforms.tLM2 = LM_U.t2;
-      sh.vertexShader = "#define USE_LM\nattribute vec2 aLM;\nvarying vec2 vLM;\nvarying float vRoomLM;\n" + sh.vertexShader;
+      sh.uniforms.tLM0 = LM_U.t0; sh.uniforms.tLM1 = LM_U.t1; sh.uniforms.tLM2 = LM_U.t2; sh.uniforms.uLMSel = LM_U.sel;
+      sh.vertexShader = "#define USE_LM\nattribute vec2 aLM;\nattribute vec2 aLM2;\nuniform float uLMSel;\nvarying vec2 vLM;\nvarying float vRoomLM;\n" + sh.vertexShader;
       sh.fragmentShader = "#define USE_LM\n" + sh.fragmentShader;
     }
     sh.uniforms.uFlick = FLICK; sh.uniforms.uRow = ROW; sh.uniforms.uSun = SUN; sh.uniforms.uDim = DIM; sh.uniforms.uHQ = HQU; sh.uniforms.uHQL = HQL;
     sh.uniforms.uAO = AOU; sh.uniforms.uGDim = GDIM; sh.uniforms.uNightL = NIGHTL; sh.uniforms.uSnap = SNAP; sh.uniforms.uGrime = GRIME; sh.uniforms.uGK = GK; sh.uniforms.uSnapK = SK;
     sh.vertexShader = "attribute vec3 aBnc;\nattribute vec4 aBnc2;\nuniform float uHQ;\nuniform float uHQL;\nattribute float aFlick;\nattribute float aRow;\nattribute float aSun;\nattribute float aRoom;\nattribute float aAO;\nuniform float uGDim;\nattribute float aNightL;\nuniform float uNightL;\nattribute vec4 aGP;\nattribute vec3 aGN;\nuniform float uFlick;\nuniform float uRow;\nuniform vec3 uSun;\nuniform float uDim;\nuniform float uAO;\nuniform vec2 uSnap;\nuniform float uSnapK;\nvarying vec4 vGP;\nvarying vec3 vGN;\n" +
       sh.vertexShader.replace("#include <color_vertex>",
-        "#include <color_vertex>\n#ifdef USE_COLOR\n vColor.rgb *= mix(1.0, uDim, aRoom);\n if (uHQL > 0.5) vColor.rgb += aBnc * mix(1.0, uDim, aRoom) + aBnc2.x * uFlick * vec3(0.9, 1.0, 0.94) + aBnc2.y * uRow * vec3(1.0, 0.97, 0.9) + aBnc2.z * uSun + aBnc2.w * uNightL * vec3(0.9, 1.0, 0.94);\n vColor.rgb += aFlick * uFlick * vec3(0.9, 1.0, 0.94) + aRow * uRow * vec3(1.0, 0.97, 0.9) + aSun * uSun + aNightL * uNightL * vec3(0.9, 1.0, 0.94);\n vColor.rgb *= mix(1.0, aAO > 0.001 ? aAO : 1.0, uAO) * uGDim;\n if (uHQL > 0.5) vColor.rgb *= mix(1.0, aAO > 0.001 ? aAO : 1.0, uAO * 0.7);\n#endif\n vGP = aGP; vGN = aGN;\n#ifdef USE_LM\n vLM = aLM; vRoomLM = aRoom;\n#endif")
+        "#include <color_vertex>\n#ifdef USE_COLOR\n vColor.rgb *= mix(1.0, uDim, aRoom);\n if (uHQL > 0.5) vColor.rgb += aBnc * mix(1.0, uDim, aRoom) + aBnc2.x * uFlick * vec3(0.9, 1.0, 0.94) + aBnc2.y * uRow * vec3(1.0, 0.97, 0.9) + aBnc2.z * uSun + aBnc2.w * uNightL * vec3(0.9, 1.0, 0.94);\n vColor.rgb += aFlick * uFlick * vec3(0.9, 1.0, 0.94) + aRow * uRow * vec3(1.0, 0.97, 0.9) + aSun * uSun + aNightL * uNightL * vec3(0.9, 1.0, 0.94);\n vColor.rgb *= mix(1.0, aAO > 0.001 ? aAO : 1.0, uAO) * uGDim;\n if (uHQL > 0.5) vColor.rgb *= mix(1.0, aAO > 0.001 ? aAO : 1.0, uAO * 0.7);\n#endif\n vGP = aGP; vGN = aGN;\n#ifdef USE_LM\n vLM = uLMSel > 0.5 ? aLM2 : aLM; vRoomLM = aRoom;\n#endif")
       .replace("#include <project_vertex>", "#include <project_vertex>\n if (uSnap.x > 0.0 && uSnapK > 0.5) { gl_Position.xy = floor(gl_Position.xy / gl_Position.w * uSnap + 0.5) / uSnap * gl_Position.w; }");
     sh.fragmentShader = sh.fragmentShader.replace("#define USE_LM\n", "");
     sh.fragmentShader = (lm ? "#define USE_LM\n" : "") + (gloss > 0 ? "#define USE_GLOSS\n" : "") + (det ? "#define USE_DETAIL\n" : "") + LM_FRAG_HEAD + GLOSS_FRAG_HEAD + DETAIL_FRAG_HEAD + GRIME_GLSL + sh.fragmentShader.replace("#include <color_fragment>", "#include <color_fragment>\n" + LM_FRAG_BODY + " if (uGrime > 0.0) diffuseColor.rgb = grime(diffuseColor.rgb);\n" + GLOSS_FRAG_BODY + DETAIL_FRAG_BODY);
@@ -927,7 +927,7 @@ function canvasTex(w, h, draw, opts = {}) {
   t.anisotropy = 8;
   t.wrapS = opts.clampS ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
   t.wrapT = opts.clampT ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
-  t.userData.ctx = ctx; t.userData.canvas = c; t.userData.draw = () => { draw(ctx, w, h); t.needsUpdate = true; };
+  t.userData.ctx = ctx; t.userData.canvas = c; t.userData.fn = draw; t.userData.draw = () => { draw(ctx, w, h); t.needsUpdate = true; };
   ALL_TEX.push(t);
   return t;
 }
@@ -1062,6 +1062,42 @@ for (const k in CLEAN_DRAW) {
     else od();
   };
 }
+// ---- 高画質：床・壁・天井の模様を「2倍の細かさ」で描いた双子のテクスチャ（近くで見たときの細かさ） ----
+//  同じ描き方を2倍に拡大して描くので、模様の形・色・明るさは同じまま、線や継ぎ目がくっきりする。
+//  そこへ平均の明るさを変えない細かいざらつきを足す（遠くでは平均されて消え、近くに寄ったときだけ見える）
+//  高画質を初めて使うときに作る（高画質オフのままなら作らない）
+// [揺れ幅, 横のぼかし, 縦のぼかし]。壁と天井はざらつきなし（壁に沿って歩くと、すぐ近くを斜めから見るので、ざらつきが筋のように見えてしまう）
+const TEX_GRAIN = { corrFloor: [0.035, 1, 1], roomFloor: [0.05, 7, 0], carpet: [0.08, 1, 1], corrWall: [0, 0, 0], roomWall: [0, 0, 0], ceil: [0, 0, 0] };
+const TEX_HQ = {};
+for (const k in TEX_GRAIN) TEX[k].userData.texKey = k;
+function microGrain(ctx, w, h, amp, seed, rx = 1, ry = 1) {
+  // ざらつきは「1画素ごとの乱数」をそのまま使わず、少しぼかしてから使う（細かすぎる乱数は、斜めから見たときにちらつくため）。
+  // rx・ry は横・縦のぼかしの幅（木の床は横に長くぼかして、木の繊維のような筋にする）。端でつながるようにぼかす（くり返して貼っても継ぎ目が出ない）
+  const rnd = rng(seed), N = new Float32Array(w * h), T = new Float32Array(w * h);
+  for (let i = 0; i < N.length; i++) N[i] = rnd() * 2 - 1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let a = 0; for (let d = -rx; d <= rx; d++) a += N[y * w + (x + d + w) % w]; T[y * w + x] = a; }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let a = 0; for (let d = -ry; d <= ry; d++) a += T[((y + d + h) % h) * w + x]; N[y * w + x] = a; }
+  let v = 0; for (let i = 0; i < N.length; i++) v += N[i] * N[i];
+  const k = amp / Math.sqrt(3) / Math.sqrt(v / N.length);   // ぼかしたあとの揺れ幅を、指定の大きさにそろえる
+  const img = ctx.getImageData(0, 0, w, h), D = img.data;
+  for (let i = 0, j = 0; i < D.length; i += 4, j++) {
+    const f = 1 + N[j] * k;   // 掛ける数の平均は 1（明るさは変えない）
+    D[i] = Math.min(255, D[i] * f); D[i + 1] = Math.min(255, D[i + 1] * f); D[i + 2] = Math.min(255, D[i + 2] * f);
+  }
+  ctx.putImageData(img, 0, 0);
+}
+function hqTex(k) {
+  if (TEX_HQ[k]) return TEX_HQ[k];
+  const base = TEX[k], W = base.userData.canvas.width, H = base.userData.canvas.height;
+  const t = canvasTex(W * 2, H * 2, (ctx) => {
+    ctx.setTransform(2, 0, 0, 2, 0, 0); ctx.clearRect(0, 0, W, H);
+    (LOOK.clean ? CLEAN_DRAW[k] : base.userData.fn)(ctx, W, H);   // 元と同じ描き方（座標は元の大きさのまま、2倍に拡大して描く）
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (TEX_GRAIN[k][0] > 0) microGrain(ctx, W * 2, H * 2, TEX_GRAIN[k][0], 9001 + W * 7 + H, TEX_GRAIN[k][1], TEX_GRAIN[k][2]);
+  }, { clampS: base.wrapS === THREE.ClampToEdgeWrapping, clampT: base.wrapT === THREE.ClampToEdgeWrapping });
+  t.magFilter = base.magFilter; t.anisotropy = base.anisotropy; t.userData.texKey = k;
+  return (TEX_HQ[k] = t);
+}
 
 // ============================================================================
 //  5. 一体成型シェル（座標圧縮グリッド・頂点共有）
@@ -1109,9 +1145,10 @@ class Acc {
     const nu = Math.max(1, Math.ceil(lu / 0.5 - 1e-6)), nv = Math.max(1, Math.ceil(lv / 0.5 - 1e-6));
     const start = this.p.length / 3, sc = this.sc;
     // ライトマップの区画：この面を一定の細かさ（kind ごと）の画素に分ける
-    const T = LM_T[kind] || 0.08;
+    const T = LM_T[kind] || 0.08, T2 = LM_T2[kind] || 0.04;
     LM_CHARTS.push({ acc: this, zone: this.zone, o: [...o], du: [...du], dv: [...dv], nrm: [...nrm], nu, nv, start,
-      n: Math.max(1, Math.ceil(lu / T - 1e-6)), m: Math.max(1, Math.ceil(lv / T - 1e-6)), px: 0, py: 0 });
+      n: Math.max(1, Math.ceil(lu / T - 1e-6)), m: Math.max(1, Math.ceil(lv / T - 1e-6)), px: 0, py: 0,
+      n2: Math.max(1, Math.ceil(lu / T2 - 1e-6)), m2: Math.max(1, Math.ceil(lv / T2 - 1e-6)), px2: 0, py2: 0 });   // 高画質用（画素の大きさが半分）
     for (let b = 0; b <= nv; b++) for (let a = 0; a <= nu; a++) {
       const x = o[0] + du[0] * a / nu + dv[0] * b / nv;
       const y = o[1] + du[1] * a / nu + dv[1] * b / nv;
@@ -1148,33 +1185,42 @@ class Acc {
 //   ・面ごとの区画を1枚の大きな絵（幅2048）に並べ、区画の画素ごとに lightPoint で光を計算する（蛍光灯は線の光、机などの影つき）
 //   ・前廊下と後廊下、非常口の写しは、区画の大きさが同じで同じ位置の光を計算するので、継ぎ目で一致する
 //   ・絵は3枚：0=ふだんの光(RGB)、1=外光・後方の灯り・夜に消える灯り、2=明滅の灯り・隅の暗がり。値は 2 で割って平方根で8bitに詰める（暗い所ほど細かく）
-//   ・学祭・Quest用の1ファイル版では、作るときに焼いた絵（window.__LIGHTMAPS）を読み込むだけ。ふつうはここで焼く（PCで十数秒）
+//   ・学祭・Quest用の1ファイル版では、作るときに焼いた絵（window.__LIGHTMAPS）を読み込むだけ。ふつうはここで焼く（PCで十数秒〜1分）
+//   ・高画質では、画素の大きさを半分（縦横2倍の細かさ）にした別の絵を使う（影や窓の光の形がくっきりする）。
+//     高画質の絵は2組：夜・深夜用（ふだんと同じ光を細かくしただけ）と、朝〜夕方用（はね返りの光つき）。高画質オフでは以前と同じ粗さの絵
 // ============================================================================
-const LM_T = { floor: 0.07, wall: 0.08, ceil: 0.15 }, LM_PAD = 1, LM_W = 2048;
+const LM_T = { floor: 0.07, wall: 0.08, ceil: 0.15 }, LM_T2 = { floor: 0.035, wall: 0.04, ceil: 0.075 }, LM_PAD = 1, LM_W = 2048;
 const LM_CHARTS = [];
-const LM_U = { t0: { value: null }, t1: { value: null }, t2: { value: null } };
-const LM = { W: LM_W, H: 0, data: null, sig: "", ms: 0, source: "" };
-function lmPack() {
-  const order = LM_CHARTS.map((c, i) => i).sort((a, b) => (LM_CHARTS[b].m - LM_CHARTS[a].m) || (LM_CHARTS[b].n - LM_CHARTS[a].n) || (a - b));
+const LM_U = { t0: { value: null }, t1: { value: null }, t2: { value: null }, sel: { value: 0 } };   // sel：1 なら高画質の細かい絵の位置（aLM2）を使う
+const LM = { W: LM_W, H: 0, H2: 0, data: null, sig: "", ms: 0, source: "" };
+function lmPackOne(nk, mk, xk, yk) {   // 区画を幅 LM_W の絵に並べる。絵の高さを返す
+  const order = LM_CHARTS.map((c, i) => i).sort((a, b) => (LM_CHARTS[b][mk] - LM_CHARTS[a][mk]) || (LM_CHARTS[b][nk] - LM_CHARTS[a][nk]) || (a - b));
   let x = 0, y = 0, sh = 0;
   for (const i of order) {
-    const c = LM_CHARTS[i], w = c.n + 2 * LM_PAD, h = c.m + 2 * LM_PAD;
+    const c = LM_CHARTS[i], w = c[nk] + 2 * LM_PAD, h = c[mk] + 2 * LM_PAD;
     if (x + w > LM_W) { x = 0; y += sh; sh = 0; }
-    c.px = x; c.py = y; x += w; sh = Math.max(sh, h);
+    c[xk] = x; c[yk] = y; x += w; sh = Math.max(sh, h);
   }
-  LM.H = Math.ceil((y + sh) / 4) * 4;
+  return Math.ceil((y + sh) / 4) * 4;
+}
+function lmPack() {
+  LM.H = lmPackOne("n", "m", "px", "py");
+  LM.H2 = lmPackOne("n2", "m2", "px2", "py2");
   for (const c of LM_CHARTS) {
     const geo = c.acc.geo;
-    let a2 = geo.attributes.aLM;
-    if (!a2) { a2 = new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2); geo.setAttribute("aLM", a2); }
-    for (let b = 0; b <= c.nv; b++) for (let a = 0; a <= c.nu; a++) {
-      const k = c.start + b * (c.nu + 1) + a;
-      a2.array[k * 2] = (c.px + LM_PAD + a / c.nu * c.n) / LM_W;
-      a2.array[k * 2 + 1] = (c.py + LM_PAD + b / c.nv * c.m) / LM.H;
+    for (const [name, n, m, px, py, H] of [["aLM", c.n, c.m, c.px, c.py, LM.H], ["aLM2", c.n2, c.m2, c.px2, c.py2, LM.H2]]) {
+      let a2 = geo.attributes[name];
+      if (!a2) { a2 = new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2); geo.setAttribute(name, a2); }
+      for (let b = 0; b <= c.nv; b++) for (let a = 0; a <= c.nu; a++) {
+        const k = c.start + b * (c.nu + 1) + a;
+        a2.array[k * 2] = (px + LM_PAD + a / c.nu * n) / LM_W;
+        a2.array[k * 2 + 1] = (py + LM_PAD + b / c.nv * m) / H;
+      }
     }
   }
   let h = 7; for (const c of LM_CHARTS) h = (h * 31 + c.n * 7 + c.m + c.px * 3 + c.py) % 1000000007;
-  LM.sig = `${LM_CHARTS.length}:${LM_W}x${LM.H}:${h}:b${BNC.K}_${BNC.AOP}_${BNC.R}_${BNC.RF}_${BNC.FC}_${BNC.S}_${BNC.B}`;
+  let h2 = 7; for (const c of LM_CHARTS) h2 = (h2 * 31 + c.n2 * 7 + c.m2 + c.px2 * 3 + c.py2) % 1000000007;
+  LM.sig = `${LM_CHARTS.length}:${LM_W}x${LM.H}:${h}:hi${LM.H2}:${h2}:b${BNC.K}_${BNC.AOP}_${BNC.R}_${BNC.RF}_${BNC.FC}_${BNC.S}_${BNC.B}`;
 }
 function lmEnc(v) { return Math.round(Math.sqrt(Math.min(1, Math.max(0, v / 2))) * 255); }
 function lmTexOpts(t) {
@@ -1182,15 +1228,24 @@ function lmTexOpts(t) {
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.flipY = false; t.premultiplyAlpha = false; t.colorSpace = THREE.NoColorSpace;
 }
 function lmBake() {
-  const t0 = performance.now(), W = LM_W, H = LM.H;
-  const mk = () => { const a = new Uint8Array(W * H * 4); for (let i = 3; i < a.length; i += 4) a[i] = 255; return a; };
-  const d = [mk(), mk(), mk()];   // ふだん（以前と同じ）
-  const q = [mk(), mk(), mk()];   // 高画質：はね返りの光つき
+  const t0 = performance.now(), W = LM_W, H = LM.H, H2 = LM.H2;
+  const mk = (h) => { const a = new Uint8Array(W * h * 4); for (let i = 3; i < a.length; i += 4) a[i] = 255; return a; };
+  const d = [mk(H), mk(H), mk(H)];      // ふだん（以前と同じ。高画質オフで使う）
+  const e = [mk(H2), mk(H2), mk(H2)];   // 高画質・夜と深夜：ふだんと同じ光を、縦横2倍の細かさで
+  const q = [mk(H2), mk(H2), mk(H2)];   // 高画質・朝〜夕方：細かい絵に、はね返りの光をのせる
+  // 区画のまわり1画素は、いちばん近い内側の画素の写し（ぼかしたときに隣の区画や黒がにじまないように）
+  const pad = (sets, n, m, px, py) => {
+    for (let j = -LM_PAD; j < m + LM_PAD; j++) for (let i = -LM_PAD; i < n + LM_PAD; i++) {
+      if (i >= 0 && i < n && j >= 0 && j < m) continue;
+      const si = Math.min(n - 1, Math.max(0, i)), sj = Math.min(m - 1, Math.max(0, j));
+      const k = ((py + LM_PAD + j) * W + px + LM_PAD + i) * 4, ks = ((py + LM_PAD + sj) * W + px + LM_PAD + si) * 4;
+      for (const set of sets) for (const a of set) { a[k] = a[ks]; a[k + 1] = a[ks + 1]; a[k + 2] = a[ks + 2]; }
+    }
+  };
   bounceSetup();
   const tb = new Float32Array(7);
   for (const c of LM_CHARTS) {
     const [ox, oy, oz] = c.o, [ux, uy, uz] = c.du, [vx, vy, vz] = c.dv, [nx, ny, nz] = c.nrm;
-    const BG = bounceGrid(c), da = BNC_DAMB[c.zone] || 0;
     for (let j = 0; j < c.m; j++) for (let i = 0; i < c.n; i++) {
       const fu = (i + 0.5) / c.n, fv = (j + 0.5) / c.m;
       const P = lightPoint(ox + ux * fu + vx * fv, oy + uy * fu + vy * fv, oz + uz * fu + vz * fv, nx, ny, nz, c.zone, true);
@@ -1198,38 +1253,44 @@ function lmBake() {
       d[0][k] = lmEnc(L[0]); d[0][k + 1] = lmEnc(L[1]); d[0][k + 2] = lmEnc(L[2]);
       d[1][k] = lmEnc(L[5]); d[1][k + 1] = lmEnc(L[4]); d[1][k + 2] = lmEnc(L[6]);
       d[2][k] = lmEnc(L[3]); d[2][k + 1] = lmEnc(P.A[0]);
-      if (BG) bounceInterp(BG, c, i, j, tb); else tb.fill(0);
+    }
+    pad([d], c.n, c.m, c.px, c.py);
+    // 高画質の細かい絵（はね返りの光は、以前と同じ間隔の見本点から補間する。細かい絵では区画の画素数が2倍なので、間隔も2倍の画素数）
+    const BG = bounceGrid(c, c.n2, c.m2, BNC.B * 2), da = BNC_DAMB[c.zone] || 0;
+    for (let j = 0; j < c.m2; j++) for (let i = 0; i < c.n2; i++) {
+      const fu = (i + 0.5) / c.n2, fv = (j + 0.5) / c.m2;
+      const P = lightPoint(ox + ux * fu + vx * fv, oy + uy * fu + vy * fv, oz + uz * fu + vz * fv, nx, ny, nz, c.zone, true);
+      const k = ((c.py2 + LM_PAD + j) * W + c.px2 + LM_PAD + i) * 4, L = P.L;
+      e[0][k] = lmEnc(L[0]); e[0][k + 1] = lmEnc(L[1]); e[0][k + 2] = lmEnc(L[2]);
+      e[1][k] = lmEnc(L[5]); e[1][k + 1] = lmEnc(L[4]); e[1][k + 2] = lmEnc(L[6]);
+      e[2][k] = lmEnc(L[3]); e[2][k + 1] = lmEnc(P.A[0]);
+      if (BG) bounceInterp(BG, c.n2, c.m2, i, j, tb); else tb.fill(0);
       q[0][k] = lmEnc(L[0] - da + tb[0]); q[0][k + 1] = lmEnc(L[1] - da + tb[1]); q[0][k + 2] = lmEnc(L[2] - da * 1.08 + tb[2]);
       q[1][k] = lmEnc(L[5] + tb[5]); q[1][k + 1] = lmEnc(L[4] + tb[4]); q[1][k + 2] = lmEnc(L[6] + tb[6]);
       q[2][k] = lmEnc(L[3] + tb[3]); q[2][k + 1] = lmEnc(Math.pow(P.A[0], BNC.AOP));   // 高画質では隅の暗がりを少し深く（はね返りの光で明るくなった分、形がぼやけないように）
     }
-    // 区画のまわり1画素は、いちばん近い内側の画素の写し（ぼかしたときに隣の区画や黒がにじまないように）
-    for (let j = -LM_PAD; j < c.m + LM_PAD; j++) for (let i = -LM_PAD; i < c.n + LM_PAD; i++) {
-      if (i >= 0 && i < c.n && j >= 0 && j < c.m) continue;
-      const si = Math.min(c.n - 1, Math.max(0, i)), sj = Math.min(c.m - 1, Math.max(0, j));
-      const k = ((c.py + LM_PAD + j) * W + c.px + LM_PAD + i) * 4, ks = ((c.py + LM_PAD + sj) * W + c.px + LM_PAD + si) * 4;
-      for (const a of d) { a[k] = a[ks]; a[k + 1] = a[ks + 1]; a[k + 2] = a[ks + 2]; }
-      for (const a of q) { a[k] = a[ks]; a[k + 1] = a[ks + 1]; a[k + 2] = a[ks + 2]; }
-    }
+    pad([e, q], c.n2, c.m2, c.px2, c.py2);
   }
-  LM.data = { base: d, hq: q }; LM.ms = performance.now() - t0; LM.source = "baked";
-  const tex = (arr) => arr.map(a => { const t = new THREE.DataTexture(a, W, H, THREE.RGBAFormat); lmTexOpts(t); t.needsUpdate = true; return t; });
-  return { base: tex(d), hq: tex(q) };
+  LM.data = { base: d, hiBase: e, hq: q }; LM.ms = performance.now() - t0; LM.source = "baked";
+  const tex = (arr, h) => arr.map(a => { const t = new THREE.DataTexture(a, W, h, THREE.RGBAFormat); lmTexOpts(t); t.needsUpdate = true; return t; });
+  return { base: tex(d, H), hiBase: tex(e, H2), hq: tex(q, H2) };
 }
 function lmLoadPrebaked(pb) {
   const load = (list) => Promise.all(list.map(src => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; })))
     .then(imgs => imgs.map(im => { const t = new THREE.Texture(im); lmTexOpts(t); t.needsUpdate = true; return t; }));
-  return Promise.all([load([pb.m0, pb.m1, pb.m2]), pb.h0 ? load([pb.h0, pb.h1, pb.h2]) : Promise.resolve(null)]).then(([base, hq]) => ({ base, hq }));
+  return Promise.all([load([pb.m0, pb.m1, pb.m2]), load([pb.n0, pb.n1, pb.n2]), load([pb.h0, pb.h1, pb.h2])]).then(([base, hiBase, hq]) => ({ base, hiBase, hq }));
 }
-// 光の絵は2組：ふだん（以前と同じ）と高画質（はね返りの光つき）。画質の切り替えは、どちらの絵を使うかを差し替えるだけ（重さは同じ）
-const LM_SETS = { base: null, hq: null };
+// 光の絵は3組：ふだん（以前と同じ）、高画質の夜・深夜（細かいだけ）、高画質の朝〜夕方（細かい＋はね返りの光）。
+// 画質の切り替えは、どの絵を使うか（と、絵の中の位置の組）を差し替えるだけ（1画素あたりの重さは同じ）
+const LM_SETS = { base: null, hiBase: null, hq: null };
 function lmUse() {
-  const ts = (HQL.value > 0.5 && LM_SETS.hq) || LM_SETS.base; if (!ts) return;
-  LM_U.t0.value = ts[0]; LM_U.t1.value = ts[1]; LM_U.t2.value = ts[2];
+  const hi = HQU.value > 0.5 && LM_SETS.hiBase && LM_SETS.hq;
+  const ts = hi ? (HQL.value > 0.5 ? LM_SETS.hq : LM_SETS.hiBase) : LM_SETS.base; if (!ts) return;
+  LM_U.t0.value = ts[0]; LM_U.t1.value = ts[1]; LM_U.t2.value = ts[2]; LM_U.sel.value = hi ? 1 : 0;
 }
 function lmFinish() {   // buildShell と出口の板を作ったあとに呼ぶ
   lmPack();
-  const take = (r) => { LM_SETS.base = r.base; LM_SETS.hq = r.hq; lmUse(); };
+  const take = (r) => { LM_SETS.base = r.base; LM_SETS.hiBase = r.hiBase; LM_SETS.hq = r.hq; lmUse(); };
   const pb = window.__LIGHTMAPS;
   if (pb && pb.sig === LM.sig) return lmLoadPrebaked(pb).then(r => { LM.source = "prebaked"; take(r); prbLoad(pb); }).catch(() => take(lmBake()));
   take(lmBake());
@@ -1237,10 +1298,11 @@ function lmFinish() {   // buildShell と出口の板を作ったあとに呼ぶ
 }
 function lmExport() {   // 1ファイル版を作るときに使う：焼いた絵をPNGにして返す
   if (!LM.data) lmBake();
-  const cv = document.createElement("canvas"); cv.width = LM_W; cv.height = LM.H; const ctx = cv.getContext("2d");
-  const out = { sig: LM.sig, W: LM_W, H: LM.H };
-  for (const [set, pre] of [[LM.data.base, "m"], [LM.data.hq, "h"]])
-    set.forEach((a, i) => { ctx.putImageData(new ImageData(new Uint8ClampedArray(a), LM_W, LM.H), 0, 0); out[pre + i] = cv.toDataURL("image/png"); });
+  const out = { sig: LM.sig, W: LM_W, H: LM.H, H2: LM.H2 };
+  for (const [set, pre, h] of [[LM.data.base, "m", LM.H], [LM.data.hiBase, "n", LM.H2], [LM.data.hq, "h", LM.H2]]) {
+    const cv = document.createElement("canvas"); cv.width = LM_W; cv.height = h; const ctx = cv.getContext("2d");
+    set.forEach((a, i) => { ctx.putImageData(new ImageData(new Uint8ClampedArray(a), LM_W, h), 0, 0); out[pre + i] = cv.toDataURL("image/png"); });
+  }
   // 小物用の光の見本点も入れておく（Quest で起動のたびに計算しないように）。有効な点だけを 0〜1.6 の16ビットで
   bounceSetup();
   const ids = []; PRB.ok.forEach((v, i) => { if (v) ids.push(i); });
@@ -1395,20 +1457,20 @@ function bounceAt(px, py, pz, nx, ny, nz, out) {
   for (let c = 0; c < 7; c++) out[c] *= BNC.K;
 }
 // ライトマップの区画ごとに、4画素おきの格子で計算する（はね返りの光はなめらかなので、間はつなぐだけでよい）
-function bounceGrid(c) {
+function bounceGrid(c, n, m, B) {   // n・m：区画の画素数、B：見本点の間隔（画素数）
   if (!(c.zone === "room" || c.zone === "corr" || c.zone === "door")) return null;
-  const B = BNC.B, gu = c.n > 1 ? Math.ceil((c.n - 1) / B) : 0, gv = c.m > 1 ? Math.ceil((c.m - 1) / B) : 0;
+  const gu = n > 1 ? Math.ceil((n - 1) / B) : 0, gv = m > 1 ? Math.ceil((m - 1) / B) : 0;
   const v = new Float32Array((gu + 1) * (gv + 1) * 7), tmp = new Float32Array(7), [nx, ny, nz] = c.nrm;
   for (let b = 0; b <= gv; b++) for (let a = 0; a <= gu; a++) {
-    const fu = (0.5 + (gu ? a * (c.n - 1) / gu : 0)) / c.n, fv = (0.5 + (gv ? b * (c.m - 1) / gv : 0)) / c.m;
-    const m = canonPt(c.o[0] + c.du[0] * fu + c.dv[0] * fv, c.o[1] + c.du[1] * fu + c.dv[1] * fv, c.o[2] + c.du[2] * fu + c.dv[2] * fv, c.zone);
-    bounceAt(m[0], m[1], m[2], nx, ny, nz, tmp);
+    const fu = (0.5 + (gu ? a * (n - 1) / gu : 0)) / n, fv = (0.5 + (gv ? b * (m - 1) / gv : 0)) / m;
+    const p = canonPt(c.o[0] + c.du[0] * fu + c.dv[0] * fv, c.o[1] + c.du[1] * fu + c.dv[1] * fv, c.o[2] + c.du[2] * fu + c.dv[2] * fv, c.zone);
+    bounceAt(p[0], p[1], p[2], nx, ny, nz, tmp);
     v.set(tmp, (b * (gu + 1) + a) * 7);
   }
   return { v, gu, gv };
 }
-function bounceInterp(G, c, i, j, out) {
-  const tu = G.gu ? i * G.gu / (c.n - 1) : 0, tv = G.gv ? j * G.gv / (c.m - 1) : 0;
+function bounceInterp(G, n, m, i, j, out) {
+  const tu = G.gu ? i * G.gu / (n - 1) : 0, tv = G.gv ? j * G.gv / (m - 1) : 0;
   const a0 = Math.min(Math.floor(tu), Math.max(0, G.gu - 1)), b0 = Math.min(Math.floor(tv), Math.max(0, G.gv - 1));
   const a1 = Math.min(G.gu, a0 + 1), b1 = Math.min(G.gv, b0 + 1), fa = tu - a0, fb = tv - b0, W = G.gu + 1, v = G.v;
   for (let k = 0; k < 7; k++)
@@ -1619,9 +1681,14 @@ function prop(geo, matrix, key, zone) {
   g.applyMatrix4(matrix); bake(g, zone);
   (STATIC[key] ||= []).push(g);
 }
+// 高画質のときだけ見せる物（on）と、高画質のときは隠す物（off）。高画質の切り替えで入れ替える
+const HQ_OBJ = { on: [], off: [] };
+const STATIC_MAT = { woodHQ: "wood", housingHQ: "housing" };   // 高画質用の形の材質（同じ材質を使う）
+const STATIC_MESH = {};
 function mergeStatic() {
   for (const key in STATIC) {
-    const list = STATIC[key];
+    // 高画質の器具は「ふだんの器具の部品すべて＋縁とふた」を1つの形にして入れ替える（描画命令の数を増やさない）
+    const list = key === "housingHQ" ? STATIC.housing.concat(STATIC.housingHQ) : STATIC[key];
     const out = new THREE.BufferGeometry();
     for (const a of ["position", "normal", "color", "aFlick", "aRow", "aSun", "aRoom", "aAO", "aGP", "aGN", "aNightL"]) {
       const size = list[0].attributes[a].itemSize;
@@ -1630,8 +1697,11 @@ function mergeStatic() {
       for (const g of list) { arr.set(g.attributes[a].array, off); off += g.attributes[a].count * size; }
       out.setAttribute(a, new THREE.BufferAttribute(arr, size));
     }
-    scene.add(new THREE.Mesh(out, PROP_MATS[key]));
+    const mesh = new THREE.Mesh(out, PROP_MATS[key] || PROP_MATS[STATIC_MAT[key]]);
+    STATIC_MESH[key] = mesh; scene.add(mesh);
   }
+  // 高画質：机の天板は角の丸い形に（ふだんの平らな天板と入れ替える）、蛍光灯は器具の縁・端のふた
+  for (const k of ["wood", "housing"]) if (STATIC_MESH[k] && STATIC_MESH[k + "HQ"]) { HQ_OBJ.off.push(STATIC_MESH[k]); HQ_OBJ.on.push(STATIC_MESH[k + "HQ"]); }
 }
 function bakedMesh(geo, mat, matrix, zone, parent = scene) {
   bake(geo, zone, matrix);
@@ -1643,6 +1713,15 @@ const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 const OBST = [];
 
 // ---- 固定式の長机＋背もたれ付きベンチ（受講者は黒板＝-X を向く） ----
+// 高画質：角の丸い天板（断面を丸めて長さ方向に押し出す。長さ方向に 0.5m ごとに区切り、光の当たり方も細かく）
+function roundedTopGeo(L, W = 0.5, T = 0.04, r = 0.012) {
+  const s = new THREE.Shape(), w = W / 2, t = T / 2;
+  s.moveTo(-w + r, -t); s.lineTo(w - r, -t); s.quadraticCurveTo(w, -t, w, -t + r); s.lineTo(w, t - r); s.quadraticCurveTo(w, t, w - r, t);
+  s.lineTo(-w + r, t); s.quadraticCurveTo(-w, t, -w, t - r); s.lineTo(-w, -t + r); s.quadraticCurveTo(-w, -t, -w + r, -t);
+  const g = new THREE.ExtrudeGeometry(s, { depth: L, bevelEnabled: false, curveSegments: 3, steps: Math.max(1, Math.ceil(L / 0.5)) });
+  g.translate(0, 0, -L / 2);
+  return g;
+}
 function deskParts(L) {
   return [
     [box(0.5, 0.04, L), [0, 0.72, 0], "wood"],
@@ -1674,15 +1753,25 @@ for (let t = 0; t < NT - 1; t++) {
         const geo = g.clone().toNonIndexed(); bake(geo, "room", M(dx + p[0], y + p[1], zc + p[2])); geo.translate(p[0], p[1], p[2]);
         (byKey[key] ||= []).push(geo);
       }
-      for (const key in byKey) anomalyDesk.add(new THREE.Mesh(mergeGeos(byKey[key]), PROP_MATS[key]));
+      for (const key in byKey) { const m = new THREE.Mesh(mergeGeos(byKey[key]), PROP_MATS[key]); anomalyDesk.add(m); if (key === "wood") HQ_OBJ.off.push(m); }
+      { // 高画質の丸い天板（ほかの机と同じ形にする。違うと異変に見えてしまう）
+        const geo = roundedTopGeo(L).toNonIndexed(); bake(geo, "room", M(dx, y + 0.72, zc)); geo.translate(0, 0.72, 0);
+        const m = new THREE.Mesh(geo, PROP_MATS.wood); anomalyDesk.add(m); HQ_OBJ.on.push(m);
+      }
       // 異変「逆さに載った長机」：この机の上に、もう一台の机（天板・幕板・脚）が逆さに載る。掃除の時間のように脚が天井を向く
       stackedDesk = new THREE.Group(); stackedDesk.position.set(dx, y + 1.52, zc); stackedDesk.rotation.set(Math.PI, 0.06, 0); stackedDesk.visible = false; scene.add(stackedDesk);
       for (const [g, p, key] of parts.slice(0, 4)) {
         const geo = g.clone(); bake(geo, "room", M(dx + p[0], y + 1.52 - p[1], zc - p[2]));
         const mesh = new THREE.Mesh(geo, PROP_MATS[key]); mesh.position.set(p[0], p[1], p[2]); stackedDesk.add(mesh);
+        if (key === "wood") {
+          HQ_OBJ.off.push(mesh);
+          const g2 = roundedTopGeo(L); bake(g2, "room", M(dx + p[0], y + 1.52 - p[1], zc - p[2]));
+          const m2 = new THREE.Mesh(g2, PROP_MATS.wood); m2.position.set(p[0], p[1], p[2]); stackedDesk.add(m2); HQ_OBJ.on.push(m2);
+        }
       }
     } else {
       for (const [g, p, key] of parts) prop(g, M(dx + p[0], y + p[1], zc + p[2]), key, "room");
+      prop(roundedTopGeo(L), M(dx, y + 0.72, zc), "woodHQ", "room");
     }
     OBST.push({ x0: dx - 0.28, x1: dx + 0.76, z0: za + 0.02, z1: zb - 0.02, desk: t === DESK_ANOMALY.tier && bi === DESK_ANOMALY.block });
     DESK_TOPS.push({ x0: dx - 0.25, x1: dx + 0.25, z0: za + 0.05, z1: zb - 0.05, y: y + 0.74 });   // はね返りの光：机の天板も光を返す
@@ -1772,6 +1861,7 @@ const boardGroup = new THREE.Group(); boardGroup.position.copy(BOARD_PIVOT); sce
 function boardPart(geo, mat, wx, wy, wz, ry = 0) {
   bake(geo, "room", M(wx, wy, wz, ry));
   const m = new THREE.Mesh(geo, mat); m.position.set(wx - BOARD_PIVOT.x, wy - BOARD_PIVOT.y, wz - BOARD_PIVOT.z); m.rotation.y = ry; boardGroup.add(m);
+  return m;
 }
 boardPart(new THREE.PlaneGeometry(BOARD_W, BOARD_H, 24, 6), boardMat, ROOM.x0 + 0.03, BOARD_Y, BOARD_Z, Math.PI / 2);
 {
@@ -1781,7 +1871,24 @@ boardPart(new THREE.PlaneGeometry(BOARD_W, BOARD_H, 24, 6), boardMat, ROOM.x0 + 
   const wx = ROOM.x0 + 0.04, list = bars.map(([g, wy, wz]) => { const geo = g.toNonIndexed(); bake(geo, "room", M(wx, wy, wz)); geo.translate(wx - BOARD_PIVOT.x, wy - BOARD_PIVOT.y, wz - BOARD_PIVOT.z); return geo; });
   boardGroup.add(new THREE.Mesh(mergeGeos(list), PROP_MATS.frame));
 }
-boardPart(box(0.12, 0.03, BOARD_W), PROP_MATS.chalkTray, ROOM.x0 + 0.08, BOARD_Y - BOARD_H / 2 - 0.1, BOARD_Z);
+const chalkTray = boardPart(box(0.12, 0.03, BOARD_W), PROP_MATS.chalkTray, ROOM.x0 + 0.08, BOARD_Y - BOARD_H / 2 - 0.1, BOARD_Z);
+{ // 高画質：チョーク受けの上のチョーク（3本）と黒板消し。黒板のグループに入れるので、傾いた黒板の異変でも一緒に動く
+  // 描画命令を増やさないよう、チョーク受け・チョーク・黒板消しを1つの形にして、ふだんのチョーク受けと入れ替える。
+  // 材質はチョーク受けの灰色のまま、チョークは光の値を明るく（白く）、黒板消しは暗く（濃い灰色に）して色を出す
+  const ty = BOARD_Y - BOARD_H / 2 - 0.1 + 0.015, tx = ROOM.x0 + 0.08;
+  const tint = (g, k) => { for (const a of ["color", "aFlick", "aRow", "aSun", "aNightL"]) { const A = g.attributes[a]; for (let i = 0; i < A.array.length; i++) A.array[i] *= k; } return g; };
+  const lum = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b, KW = lum(new THREE.Color(PROP_COLORS.sill)) / lum(new THREE.Color(PROP_COLORS.chalkTray));
+  const toGroup = (g, wx, wy, wz) => g.translate(wx - BOARD_PIVOT.x, wy - BOARD_PIVOT.y, wz - BOARD_PIVOT.z);
+  const parts = [chalkTray.geometry.toNonIndexed().translate(chalkTray.position.x, chalkTray.position.y, chalkTray.position.z)];
+  for (const [dz, rot] of [[-2.6, 0.2], [-2.47, -0.6], [3.15, 1.2]]) {   // [黒板の中心からの横位置, 少しの向き]
+    const g = new THREE.CylinderGeometry(0.0055, 0.0055, 0.072, 8).rotateX(Math.PI / 2).rotateY(rot * 0.1).toNonIndexed();
+    const wx = tx + 0.01, wy = ty + 0.0055, wz = BOARD_Z + dz; bake(g, "room", M(wx, wy, wz));
+    parts.push(toGroup(tint(g, KW), wx, wy, wz));
+  }
+  { const g = box(0.052, 0.034, 0.13).toNonIndexed(), wx = tx, wy = ty + 0.017, wz = BOARD_Z - 1.55; bake(g, "room", M(wx, wy, wz)); parts.push(toGroup(tint(g, 0.45), wx, wy, wz)); }
+  const trayHQ = new THREE.Mesh(mergeGeos(parts), PROP_MATS.chalkTray); boardGroup.add(trayHQ);
+  HQ_OBJ.on.push(trayHQ); HQ_OBJ.off.push(chalkTray);
+}
 
 // ---- 最終講義（深夜0:00）の演出 ----
 //  教室に入ると扉が閉まり、灯りが後ろから落ち、暗がりに受講者が現れる。黒板にひとりでに文字が書かれ、
@@ -2489,9 +2596,20 @@ function addTube(geo, mat, x, y, z) {
   const P = geo.parameters || {}; TUBE_INFO.push({ mat, x, y, z, ax: (P.width || 0) > (P.depth || 0) ? "x" : "z", len: Math.max(P.width || 0, P.depth || 0) });
   geo.translate(x, y, z); if (!TUBES.has(mat)) TUBES.set(mat, []); TUBES.get(mat).push(geo);
 }
+// 高画質：蛍光灯の器具の作り込み（両側の縁・端のふた）。高画質のときだけ見せる
+// （管を横切るルーバーも試したが、遠くから見ると蛍光灯が点線のように切れて見え、雰囲気が変わるのでやめた）
+function fixtureDetail(x, ceilY, z, along, len, zone) {
+  const key = "housingHQ", y = ceilY - 0.064;
+  const B = (a, h, b, ox, oy, oz) => prop(along ? box(a, h, b) : box(b, h, a), M(x + (along ? ox : oz), oy, z + (along ? oz : ox)), key, zone);
+  for (const s of [-1, 1]) {
+    B(len + 0.12, 0.03, 0.012, 0, y, s * 0.124);                // 両側の縁
+    B(0.012, 0.03, 0.26, s * (len / 2 + 0.054), y, 0);          // 端のふた
+  }
+}
 for (const L of LAMPS) {
   const along = L.axis === "x", len = L.zone === "room" ? 1.6 : 1.2;
   prop(along ? box(len + 0.12, 0.05, 0.26) : box(0.26, 0.05, len + 0.12), M(L.x, L.ceilY - 0.025, L.z), "housing", L.zone);
+  fixtureDetail(L.x, L.ceilY, L.z, along, len, L.zone);
   addTube(along ? box(len, 0.03, 0.14) : box(0.14, 0.03, len), L.tubeFlick ? flickLampMat : L.row ? rowLampMat : L.night ? nightLampMat : L.zone === "room" ? roomLampMat : lampMat, L.x, L.ceilY - 0.065, L.z);
 }
 
@@ -2993,6 +3111,7 @@ const frontSign = SIGNS.find(sg => sg.c === CF && sg.e === 1);
     if (L.zone !== "corr" || L.x < LANE_B.x0 || L.x > LANE_B.x1 || L.z < LANE_B.z0 || L.z > LANE_B.z1 || L.ceilY < TOP) continue;
     const along = L.axis === "x", len = 1.2;
     prop(along ? box(len + 0.12, 0.05, 0.26) : box(0.26, 0.05, len + 0.12), M(L.x + dx, L.ceilY - 0.025 + dy, L.z + dz), "housing", "corr");
+    fixtureDetail(L.x + dx, L.ceilY + dy, L.z + dz, along, len, "corr");
     addTube(along ? box(len, 0.03, 0.14) : box(0.14, 0.03, len), lampMat, L.x + dx, L.ceilY - 0.065 + dy, L.z + dz);
   }
 }
@@ -4939,6 +5058,7 @@ $("btn-vr").addEventListener("click", async () => {
       camera.position.set(0, 1.6, 0); if (vrPanel) vrPanel.visible = false;
       if (GUIDE.vrMesh) GUIDE.vrMesh.visible = false; if (VRMENU.mesh) VRMENU.mesh.visible = false; vignetteMesh.visible = false; hideVrCert(); setQuality(0);
       state.mode = "title"; show("title");
+      setTimeout(applyPixelRatio, 0);   // VR中に高画質を切り替えていたら、PCの画面の細かさをここで合わせる
     });
   } catch (e) {
     fail("この画面ではVRの開始が許可されていません（埋め込み表示の制限）。Quest 3 では単体版のページを開いてください。");
@@ -5218,7 +5338,7 @@ function applyGfx() {
   scene.fog.density = retro ? BASE_FOG * 2.1 : st === "A" ? BASE_FOG * 1.15 : BASE_FOG;
   if (LOOK.clean !== clean) {
     LOOK.clean = clean;
-    for (const k in CLEAN_DRAW) TEX[k].userData.draw();
+    for (const k in CLEAN_DRAW) { TEX[k].userData.draw(); if (TEX_HQ[k]) TEX_HQ[k].userData.draw(); }
     for (const k in PROP_MATS) PROP_MATS[k].color.setHex(clean ? PROP_COLORS_CLEAN[k] : PROP_COLORS[k]);
     for (const m of scene.getObjectByName("Shell").children) {
       const def = SHELL_MATS[m.name];
@@ -5255,6 +5375,27 @@ const HQ_KEY = "final-lecture-hq-v1";
 const HQ = { on: true };
 try { const v = localStorage.getItem(HQ_KEY); if (v === "0" || v === "1") HQ.on = v === "1"; } catch (e) { /* 既定は高画質 */ }
 const HQ_HOOKS = [];   // 高画質の切り替えで、ほかに変える物（質感など）
+HQ_HOOKS.push((on) => { for (const m of HQ_OBJ.on) m.visible = on; for (const m of HQ_OBJ.off) m.visible = !on; });
+HQ_HOOKS.push((on) => {   // 床・壁・天井の模様：高画質なら2倍の細かさの双子に入れ替える（壁の材質は非常口の出口の板も同じ物を使う）
+  for (const m of scene.getObjectByName("Shell").children) {
+    const mat = m.material, k = mat.map && mat.map.userData.texKey;
+    if (k) mat.map = on ? hqTex(k) : TEX[k];
+  }
+});
+// ---- PCの画面の細かさ：高画質なら画面の2倍の細かさで描く（以前は最大1.5倍。ふつうのモニターでは縮めて表示するので、模様のちらつきやギザギザが減る）。
+//  遊んでいる間に 1秒 50回を下回る状態が3秒続いたら、その回は以前の細かさに戻す。VRには関係しない（VRはヘッドセット側で決まる）
+const PCQ = { low: 0, capped: false };
+function applyPixelRatio() {
+  if (renderer.xr.isPresenting) return;
+  const want = HQ.on && !PCQ.capped ? 2 : Math.min(window.devicePixelRatio || 1, 1.5);
+  if (renderer.getPixelRatio() !== want) renderer.setPixelRatio(want);
+}
+function pcQuality(fps) {
+  if (state.mode !== "play" || PCQ.capped || renderer.getPixelRatio() <= 1.5) { PCQ.low = 0; return; }
+  PCQ.low = fps < 50 ? PCQ.low + 1 : 0;
+  if (PCQ.low >= 6) { PCQ.capped = true; applyPixelRatio(); }   // 0.5秒ごとに数えるので 6回＝3秒
+}
+HQ_HOOKS.push(applyPixelRatio);
 // 高画質の光は、朝・昼・夕方だけ。夜・深夜（怖さの本番）は以前とまったく同じ光にする（作者：画質より怖さを重視）
 //  切り替わるのは限が変わる瞬間（ワープ）で、そのとき廊下の節電消灯も起きるので目立たない
 function hqLightUpdate() {
@@ -5410,6 +5551,7 @@ function xrTargetFps() {
   return Math.min(120, Math.max(72, QUALITY.peak));
 }
 function checkQuality(fps) {
+  if (!renderer.xr.isPresenting) pcQuality(fps);
   if (!renderer.xr.isPresenting || state.mode !== "play") { QUALITY.low = 0; return; }
   QUALITY.peak = Math.max(QUALITY.peak, Math.round(fps));
   // 描くべき回数の 92% を下回る状態が続いたら（90Hz なら 83fps 未満、72Hz なら 66fps 未満）。
@@ -5485,7 +5627,7 @@ window.__fl = {
   CLIMAX, DOORS, EXIT, EXIT_T, EXF, K: { CF, CB, XF, XB, LEG_Z0, LEG_Z1, ROOM, SPAWN, SHIFT_X }, openExit, nearExit, DUST_OFF, exitPatch, exitHoleInView,
   goView(id, lecture) { state.final = false; state.lecture = lecture; state.anomaly = id; state.judged = false; applyAnomaly(); debugGoAnomaly(); },
   gfx(style, t) { GFX.style = style; applyGfx(); if (t !== undefined) { GFX.frozen = true; GFX.time = t; } },
-  GFX, ZONE_CULL, updateZoneCull, xrTargetFps, HQ, setHQ, applyHQ, BNC, LM_SETS, HQL, HQU, bounceAt, lightAt, shaftGroup, shaftMat, SHAFTS, HALO_GROUPS, updateHalos
+  GFX, ZONE_CULL, updateZoneCull, xrTargetFps, HQ, setHQ, applyHQ, BNC, LM_SETS, HQL, HQU, HQ_OBJ, TEX, TEX_HQ, PCQ, bounceAt, lightAt, shaftGroup, shaftMat, SHAFTS, HALO_GROUPS, updateHalos
 };
 
 // ============================================================================
