@@ -131,6 +131,14 @@ button:focus-visible { outline: 2px solid var(--blood); outline-offset: 2px; }
 .sheet .stack { display: grid; gap: 10px; }
 .sheet button { border-color: var(--panel-edge); color: var(--ink); background: #18201d; width: 100%; }
 .sheet button.primary { background: var(--accent); color: #101413; border-color: var(--accent); }
+details.staff { margin: 14px 0 4px; font-size: 13px; color: var(--muted); }
+details.staff > summary { cursor: pointer; padding: 4px 2px; opacity: .8; }
+details.staff[open] > summary { margin-bottom: 10px; }
+fieldset.comfort { border: 1px solid rgba(255,255,255,.14); border-radius: 8px; padding: 4px 12px 6px; margin: 4px 0 14px; }
+fieldset.comfort legend { font-size: 13px; color: var(--muted); padding: 0 6px; }
+#title fieldset.comfort { border-color: rgba(40,36,28,.25); }
+#title fieldset.comfort legend, #title fieldset.comfort .row { color: #3a372f; }
+#title details.staff { color: #5a5548; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--muted); padding: 4px 2px; }
 .row input[type=range] { width: 52%; accent-color: var(--accent); }
 .row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
@@ -310,10 +318,10 @@ button:focus-visible { outline: 2px solid var(--blood); outline-offset: 2px; }
         <dt>単位</dt><dd id="syl-goal">8回連続で正しく行動すること</dd>
       </dl>
       <ul class="rules">
-        <li>大講義室と、前扉の外の廊下をよく観察してください。教室の後ろの壁の掲示にも注意事項があります。</li>
-        <li>異変がなければ<b>前扉</b>から出て、廊下を進んでください。</li>
-        <li>異変を見つけたら引き返してください。教室にいるときは<b>後ろ扉</b>から、廊下にいるときは<b>非常口</b>から戻ります。</li>
-        <li>限が進むと窓の外の時刻も進みます。空・時計・明るさの変化は異変ではありません。夜（18時以降）は節電のため、廊下の照明の一部が消えます（毎回同じ場所です）。</li>
+        <li><b>おかしな所（異変）がなければ「進む」、あれば「引き返す」。</b>扉の上の案内板に従ってください。</li>
+        <li>進む＝<b>前扉</b>から出て廊下を進む。引き返す＝教室では<b>後ろ扉</b>から、廊下では<b>非常口</b>から戻る。</li>
+        <li>1限目に異変はありません。大講義室と廊下をよく見て覚えてください。何コマ進んだかは、黒板の横の時間割でわかります。</li>
+        <li>限が進むと窓の外の時刻も進みます。空・時計・明るさの変化は異変ではありません。</li>
         <li id="syl-penalty">判断を誤ると、1限目（朝）からやり直しになります。</li>
       </ul>
       <fieldset class="diff">
@@ -322,18 +330,23 @@ button:focus-visible { outline: 2px solid var(--blood); outline-offset: 2px; }
         <label><input type="radio" name="diff" value="normal" id="diff-normal" checked><span><b>履修</b><small>すべての異変。間違えると1限目へ戻る</small></span></label>
         <label><input type="radio" name="diff" value="hard" id="diff-hard"><span><b>再履修</b><small>気づきにくい異変が多い。深夜の補講まで全10限</small></span></label>
       </fieldset>
-      <div class="gfx">
-        <label class="bright">画面の明るさ <input type="range" id="gfx-bright" min="0.6" max="1.6" step="0.05" value="1"> <small>暗い部屋では少し上げてください</small></label>
-      </div>
-      <label class="fest"><input type="checkbox" id="chk-hq" checked><span>高画質 <small>光の回り込み・くっきりした影・細かい模様。重い・見にくいと感じたら外すと以前の見た目に戻ります</small></span></label>
-      <label class="fest"><input type="checkbox" id="chk-fest"><span>学祭モード <small>5限でクリア（約5分）。朝から深夜までを5コマで駆け抜けます</small></span></label>
-      <label class="fest"><input type="checkbox" id="chk-help"><span>お助け掲示板 <small>判断を誤ると、教室の後ろの掲示板に見逃した異変が貼られます</small></span></label>
+      <div class="slot-comfort" id="slot-comfort-title"></div>
       <div class="actions">
         <button class="primary" id="btn-start" type="button">講義室に入る</button>
         <button id="btn-vr" type="button">VRで入る</button>
         <button id="btn-archive" type="button">異変事典</button>
-        <button id="btn-records" type="button">プレイ記録</button>
       </div>
+      <!-- 遊ぶ人は触らなくてよい設定（学祭では部員が最初に1回決めておく） -->
+      <details class="staff">
+        <summary>スタッフ用の設定</summary>
+        <div class="gfx">
+          <label class="bright">画面の明るさ <input type="range" id="gfx-bright" min="0.6" max="1.6" step="0.05" value="1"> <small>暗い部屋では少し上げてください</small></label>
+        </div>
+        <label class="fest"><input type="checkbox" id="chk-fest"><span>学祭モード <small>5限でクリア（約5分）。朝から深夜までを5コマで駆け抜けます</small></span></label>
+        <label class="fest"><input type="checkbox" id="chk-hq" checked><span>高画質 <small>光の回り込み・くっきりした影・細かい模様。重い・見にくいと感じたら外すと以前の見た目に戻ります</small></span></label>
+        <label class="fest"><input type="checkbox" id="chk-help"><span>お助け掲示板 <small>判断を誤ると、教室の後ろの掲示板に見逃した異変が貼られます</small></span></label>
+        <div class="actions"><button id="btn-records" type="button">プレイ記録</button></div>
+      </details>
       <div class="keys">
         PC：<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動　マウス 視点　<kbd>Shift</kbd> ダッシュ切替　<kbd>E</kbd> 調べる・非常口を開ける　<kbd>R</kbd> ルールと操作　<kbd>Esc</kbd> 一時停止　<kbd>F2</kbd> デバッグ<br>
         Quest：左スティック 移動　右スティック 向きを変える　トリガー 調べる　Y ルールと操作　X 一時停止・設定
@@ -348,19 +361,30 @@ button:focus-visible { outline: 2px solid var(--blood); outline-offset: 2px; }
     <h2>一時停止</h2>
     <div class="stack">
       <button class="primary" id="btn-resume" type="button">再開する</button>
-      <button id="btn-archive2" type="button">異変事典</button>
-      <button id="btn-records2" type="button">プレイ記録（スタッフ用）</button>
+      <button id="btn-guide" type="button">ルールと操作を見る（R）</button>
       <button id="btn-restart" type="button">1限目からやり直す</button>
       <button id="btn-totitle" type="button">タイトルへ戻る</button>
-      <div class="row"><label for="sens">マウス感度</label><input id="sens" type="range" min="0.4" max="2.5" step="0.05" value="1"></div>
-      <div class="row"><label for="chk-noaudio">音の異変を出さない</label><input id="chk-noaudio" type="checkbox"></div>
-      <div class="row"><label for="chk-hq2">高画質（外すと以前の見た目）</label><input id="chk-hq2" type="checkbox" checked></div>
-      <div class="row"><label for="chk-dash">ダッシュを使う</label><input id="chk-dash" type="checkbox" checked></div>
-      <div class="row"><label for="chk-vignette">酔い止めの縁取り（VR）</label><input id="chk-vignette" type="checkbox"></div>
-      <div class="row"><label for="chk-snap">向きを30°ずつ変える（VR）</label><input id="chk-snap" type="checkbox"></div>
-      <div class="row"><label for="chk-help2">お助け掲示板</label><input id="chk-help2" type="checkbox"></div>
-      <button id="btn-guide" type="button">ルールと操作を見る（R）</button>
-      <button id="btn-debug" type="button">デバッグメニュー（F2）</button>
+      <div class="slot-comfort" id="slot-comfort-pause">
+        <!-- 酔い対策・操作：遊ぶ人が自分で決める設定。タイトルと一時停止の両方に出す（同じ部品を移して使う） -->
+        <fieldset class="comfort" id="comfort-box">
+          <legend>酔い対策・操作</legend>
+          <div class="row"><label for="sens">マウス感度（PC）</label><input id="sens" type="range" min="0.4" max="2.5" step="0.05" value="1"></div>
+          <div class="row"><label for="chk-dash">ダッシュを使う</label><input id="chk-dash" type="checkbox" checked></div>
+          <div class="row"><label for="chk-vignette">酔い止めの縁取り（VR）</label><input id="chk-vignette" type="checkbox"></div>
+          <div class="row"><label for="chk-snap">向きを30°ずつ変える（VR）</label><input id="chk-snap" type="checkbox"></div>
+        </fieldset>
+      </div>
+      <details class="staff">
+        <summary>スタッフ用の設定</summary>
+        <div class="stack">
+          <div class="row"><label for="chk-hq2">高画質（外すと以前の見た目）</label><input id="chk-hq2" type="checkbox" checked></div>
+          <div class="row"><label for="chk-help2">お助け掲示板</label><input id="chk-help2" type="checkbox"></div>
+          <div class="row"><label for="chk-noaudio">音の異変を出さない</label><input id="chk-noaudio" type="checkbox"></div>
+          <button id="btn-archive2" type="button">異変事典</button>
+          <button id="btn-records2" type="button">プレイ記録</button>
+          <button id="btn-debug" type="button">デバッグメニュー（F2）</button>
+        </div>
+      </details>
     </div>
   </div>
 </div>
@@ -597,7 +621,7 @@ for (const L of LAMPS) if (L.zone === "room" && L.x === BACK_ROW_X) L.row = true
 const HYD_DX = -HALF / 4, HYD_Y = 0.95, HYD_LAMP_Y = 1.62;   // 消火栓：長い廊下の奥側の壁、夜に消える灯りの真下
 function corridorLamps(c, oy, flickEnd) {
   const Y = oy + CH;
-  // 長い廊下の灯りは、夜（18時以降）は節電のため3本のうち2本（kが3の倍数以外）が消える。毎周・前後の廊下とも同じ
+  // 長い廊下の灯りのうち3本に2本（kが3の倍数以外）は「夜に消える灯り」として別チャンネルで焼いてある（以前の節電用。10/25 夜から節電はなく、補講の停電でだけ消える）
   for (let k = -4; k <= 4; k++) addLamp(c + k * HALF / 4, (LEG_Z0 + LEG_Z1) / 2, Y, "corr", "x", false, false, k % 3 !== 0);
   addGlow(c + HYD_DX, oy + HYD_LAMP_Y, LEG_Z1 - 0.1, [1.0, 0.08, 0.05], 0.9, 3.4, 0.8);
   for (const e of [-1, 1]) {
@@ -711,7 +735,10 @@ const SUN = { value: new THREE.Vector3(0.5, 0.56, 0.62) };
 const GDIM = { value: 1 };     // 全体の明るさ（非常口の扉が閉まった瞬間の一瞬の明滅に使う）
 const HQU = { value: 0 };      // 高画質（はね返りの光など）を使うか。1＝使う。0 のときは以前とまったく同じ計算になる
 const HQL = { value: 0 };      // 高画質の「光」（はね返り・深い暗がり）を使うか。怖さを残すため、夜・深夜は使わない（以前と同じ光）。木目・蛍光灯のにじみは HQU
-const NIGHTL = { value: 1 };   // 節電で消える廊下の灯り（1=点灯、0=消灯）
+const NIGHTL = { value: 1 };   // 以前は夜の節電で消えた廊下の灯り（10/25 夜から節電はなし。いつも 1=点灯。停電の補講では 0）
+// 廊下・扉の外の明るさ（夜は灯りを全部点けたまま、そろえて少し暗くする。消えた蛍光灯を作らないので異変と間違えない）
+const CDIM = { value: 1 };
+const CDIM_BY_BAND = { "朝": 1, "昼": 1, "夕方": 1, "夜": 0.62, "深夜": 0.55 };
 const DIM = { value: 1 };   // 教室だけ夜ほど少し暗くする（廊下は時間で変えない）
 const GRIME = { value: 0 }, AOU = { value: 0 }, SNAP = { value: new THREE.Vector2(0, 0) };
 // 壁・天井・床の汚れ（雨だれ・天井の輪じみ・床ぎわの黒ずみ・靴の擦り跡）。座標は焼き込みと同じ「前廊下の座標」なので、ワープの継ぎ目でも模様が一致する
@@ -756,7 +783,7 @@ vec3 grime(vec3 c) {
 const LM_FRAG_HEAD = `
 #ifdef USE_LM
 uniform sampler2D tLM0; uniform sampler2D tLM1; uniform sampler2D tLM2;
-uniform float uFlick; uniform float uRow; uniform vec3 uSun; uniform float uDim; uniform float uAO; uniform float uGDim; uniform float uNightL;
+uniform float uFlick; uniform float uRow; uniform vec3 uSun; uniform float uDim; uniform float uAO; uniform float uGDim; uniform float uNightL; uniform float uCDim;
 varying vec2 vLM; varying float vRoomLM;
 #endif
 `;
@@ -765,7 +792,7 @@ const LM_FRAG_BODY = `
  vec3 m0 = texture2D(tLM0, vLM).rgb, m1 = texture2D(tLM1, vLM).rgb, m2 = texture2D(tLM2, vLM).rgb;
  m0 = m0 * m0 * 2.0; m1 = m1 * m1 * 2.0; m2 = m2 * m2 * 2.0;
  vec3 lc = m0 * mix(1.0, uDim, vRoomLM) + m2.r * uFlick * vec3(0.9, 1.0, 0.94) + m1.g * uRow * vec3(1.0, 0.97, 0.9) + m1.r * uSun + m1.b * uNightL * vec3(0.9, 1.0, 0.94);
- lc *= mix(1.0, m2.g > 0.001 ? m2.g : 1.0, uAO) * uGDim;
+ lc *= mix(1.0, m2.g > 0.001 ? m2.g : 1.0, uAO) * uGDim * mix(uCDim, 1.0, vRoomLM);
  diffuseColor.rgb *= lc;
 #endif
 `;
@@ -833,10 +860,10 @@ function patch(mat, gk = 0.5, snap = true, lm = false, gloss = 0) {
       sh.fragmentShader = "#define USE_LM\n" + sh.fragmentShader;
     }
     sh.uniforms.uFlick = FLICK; sh.uniforms.uRow = ROW; sh.uniforms.uSun = SUN; sh.uniforms.uDim = DIM; sh.uniforms.uHQ = HQU; sh.uniforms.uHQL = HQL;
-    sh.uniforms.uAO = AOU; sh.uniforms.uGDim = GDIM; sh.uniforms.uNightL = NIGHTL; sh.uniforms.uSnap = SNAP; sh.uniforms.uGrime = GRIME; sh.uniforms.uGK = GK; sh.uniforms.uSnapK = SK;
-    sh.vertexShader = "attribute vec3 aBnc;\nattribute vec4 aBnc2;\nuniform float uHQ;\nuniform float uHQL;\nattribute float aFlick;\nattribute float aRow;\nattribute float aSun;\nattribute float aRoom;\nattribute float aAO;\nuniform float uGDim;\nattribute float aNightL;\nuniform float uNightL;\nattribute vec4 aGP;\nattribute vec3 aGN;\nuniform float uFlick;\nuniform float uRow;\nuniform vec3 uSun;\nuniform float uDim;\nuniform float uAO;\nuniform vec2 uSnap;\nuniform float uSnapK;\nvarying vec4 vGP;\nvarying vec3 vGN;\n" +
+    sh.uniforms.uAO = AOU; sh.uniforms.uGDim = GDIM; sh.uniforms.uNightL = NIGHTL; sh.uniforms.uCDim = CDIM; sh.uniforms.uSnap = SNAP; sh.uniforms.uGrime = GRIME; sh.uniforms.uGK = GK; sh.uniforms.uSnapK = SK;
+    sh.vertexShader = "attribute vec3 aBnc;\nattribute vec4 aBnc2;\nuniform float uHQ;\nuniform float uHQL;\nattribute float aFlick;\nattribute float aRow;\nattribute float aSun;\nattribute float aRoom;\nattribute float aAO;\nuniform float uGDim;\nuniform float uCDim;\nattribute float aNightL;\nuniform float uNightL;\nattribute vec4 aGP;\nattribute vec3 aGN;\nuniform float uFlick;\nuniform float uRow;\nuniform vec3 uSun;\nuniform float uDim;\nuniform float uAO;\nuniform vec2 uSnap;\nuniform float uSnapK;\nvarying vec4 vGP;\nvarying vec3 vGN;\n" +
       sh.vertexShader.replace("#include <color_vertex>",
-        "#include <color_vertex>\n#ifdef USE_COLOR\n vColor.rgb *= mix(1.0, uDim, aRoom);\n if (uHQL > 0.5) vColor.rgb += aBnc * mix(1.0, uDim, aRoom) + aBnc2.x * uFlick * vec3(0.9, 1.0, 0.94) + aBnc2.y * uRow * vec3(1.0, 0.97, 0.9) + aBnc2.z * uSun + aBnc2.w * uNightL * vec3(0.9, 1.0, 0.94);\n vColor.rgb += aFlick * uFlick * vec3(0.9, 1.0, 0.94) + aRow * uRow * vec3(1.0, 0.97, 0.9) + aSun * uSun + aNightL * uNightL * vec3(0.9, 1.0, 0.94);\n vColor.rgb *= mix(1.0, aAO > 0.001 ? aAO : 1.0, uAO) * uGDim;\n if (uHQL > 0.5) vColor.rgb *= mix(1.0, aAO > 0.001 ? aAO : 1.0, uAO * 0.7);\n#endif\n vGP = aGP; vGN = aGN;\n#ifdef USE_LM\n vLM = uLMSel > 0.5 ? aLM2 : aLM; vRoomLM = aRoom;\n#endif")
+        "#include <color_vertex>\n#ifdef USE_COLOR\n vColor.rgb *= mix(1.0, uDim, aRoom);\n if (uHQL > 0.5) vColor.rgb += aBnc * mix(1.0, uDim, aRoom) + aBnc2.x * uFlick * vec3(0.9, 1.0, 0.94) + aBnc2.y * uRow * vec3(1.0, 0.97, 0.9) + aBnc2.z * uSun + aBnc2.w * uNightL * vec3(0.9, 1.0, 0.94);\n vColor.rgb += aFlick * uFlick * vec3(0.9, 1.0, 0.94) + aRow * uRow * vec3(1.0, 0.97, 0.9) + aSun * uSun + aNightL * uNightL * vec3(0.9, 1.0, 0.94);\n vColor.rgb *= mix(1.0, aAO > 0.001 ? aAO : 1.0, uAO) * uGDim * mix(uCDim, 1.0, aRoom);\n if (uHQL > 0.5) vColor.rgb *= mix(1.0, aAO > 0.001 ? aAO : 1.0, uAO * 0.7);\n#endif\n vGP = aGP; vGN = aGN;\n#ifdef USE_LM\n vLM = uLMSel > 0.5 ? aLM2 : aLM; vRoomLM = aRoom;\n#endif")
       .replace("#include <project_vertex>", "#include <project_vertex>\n if (uSnap.x > 0.0 && uSnapK > 0.5) { gl_Position.xy = floor(gl_Position.xy / gl_Position.w * uSnap + 0.5) / uSnap * gl_Position.w; }");
     sh.fragmentShader = sh.fragmentShader.replace("#define USE_LM\n", "");
     sh.fragmentShader = (lm ? "#define USE_LM\n" : "") + (gloss > 0 ? "#define USE_GLOSS\n" : "") + (det ? "#define USE_DETAIL\n" : "") + LM_FRAG_HEAD + GLOSS_FRAG_HEAD + DETAIL_FRAG_HEAD + GRIME_GLSL + sh.fragmentShader.replace("#include <color_fragment>", "#include <color_fragment>\n" + LM_FRAG_BODY + " if (uGrime > 0.0) diffuseColor.rgb = grime(diffuseColor.rgb);\n" + GLOSS_FRAG_BODY + DETAIL_FRAG_BODY);
@@ -1925,6 +1952,9 @@ function drawBoard() {
   const P = state.epilogue ? { ...PERIODS[4], idx: 4 } : lecturePeriod(state.lecture);   // 終わりの場面：元の大学のふつうの4限
   ctx.font = chalkFont(P.label.length > 4 ? 112 : 170); ctx.fillText(P.label, 100, 280);
   ctx.font = chalkFont(46); ctx.fillText(P.time + " 〜", 112, 370);
+  if (state.retake && !state.epilogue && !blood) {   // 判断を誤った直後：やり直しになったことをはっきり見せる（何を見逃したかは言わない）
+    ctx.save(); ctx.font = chalkFont(52); ctx.fillText("再受講", 118, 438); ctx.lineWidth = 4; ctx.strokeRect(104, 392, 186, 60); ctx.restore();
+  }
   if (blood) {
     const words = ["不可", "不可", "留年", "D", "不合格", "単位取得失敗", "不可", "再履修", "D", "留年"];
     for (let i = 0; i < 12; i++) {
@@ -1971,15 +2001,49 @@ function drawBoard() {
     for (let i = 0; i < 14; i++) { ctx.fillStyle = `rgba(220,230,215,${0.05 + rnd() * 0.05})`; ctx.fillRect(820 + rnd() * 1000, 60 + rnd() * 330, 160 + rnd() * 260, 14 + rnd() * 30); }
     return;
   }
-  ctx.font = chalkFont(44); ctx.fillText("解析学特論　第" + (8 + state.lecture) + "回　留数定理", 820, 92);
+  ctx.font = chalkFont(44); ctx.fillText("解析学特論　第11回　留数定理", 820, 92);   // 板書の本文は毎回同じ（限ごとに変わると「消された板書」の異変と紛らわしい）
   ctx.font = chalkFont(56); ctx.fillText("∮_C f(z) dz = 2πi Σ Res(f, aₖ)", 820, 190);
   ctx.font = chalkFont(40); ctx.fillText("Res(f, a) = lim (z−a) f(z)", 820, 270);
   ctx.fillText("z→a", 975, 305);
   ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(1720, 300, 170, 100, 0, 0, Math.PI * 2); ctx.stroke();
   for (const [px, py] of [[1660, 280], [1790, 320], [1700, 340]]) { ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.fill(); }
   ctx.beginPath(); ctx.moveTo(1880, 300); ctx.lineTo(1866, 286); ctx.moveTo(1880, 300); ctx.lineTo(1894, 286); ctx.stroke();
-  ctx.font = chalkFont(34); ctx.fillText("※ 出席は扉で確認します", 820, 400);
+  ctx.font = chalkFont(34);
+  if (state.lecture === 1 && !state.epilogue) ctx.fillText("※ 本日は通常どおり。教室と廊下をよく見ておくこと", 820, 440);   // 1限目は下見（異変は出ない）
+  else ctx.fillText("※ 異変に気づいたら引き返すこと", 820, 440);
 }
+// ---- 時間割（前の壁、黒板の右・前扉の近く）：今日のコマと開始時刻。正しく進んだコマに判が押され、誤ると全部消える ----
+//  本家の「出口の番号」の代わり。あと何コマで終わるかがわかる。異変の材料にはしない（いつも正しい）
+const ttTex = canvasTex(512, 680, () => {}, { clampS: true, clampT: true });
+function drawTimetable() {
+  const ctx = ttTex.userData.ctx, w = 512, h = 680, G = '"Zen Kaku Gothic New", sans-serif';
+  ttTex.needsUpdate = true;
+  ctx.fillStyle = "#f3f0e6"; ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = "#24324a"; ctx.fillRect(0, 0, w, 92);
+  ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = `700 40px ${G}`; ctx.fillText("本日の時間割", w / 2, 36);
+  ctx.font = `500 21px ${G}`; ctx.fillText("304大講義室　解析学特論", w / 2, 72);
+  const n = goal(), top = 112, bottom = h - 74, rh = Math.min(64, (bottom - top) / n);
+  const done = state.final ? n : Math.max(0, state.lecture - 1);
+  for (let i = 1; i <= n; i++) {
+    const P = lecturePeriod(i), y = top + (i - 1) * rh, cur = !state.final && i === state.lecture;
+    if (cur) { ctx.fillStyle = "#ffe9a8"; ctx.fillRect(10, y + 2, w - 20, rh - 4); }
+    ctx.fillStyle = "#1d1f1c"; ctx.textAlign = "left";
+    ctx.font = `700 ${Math.round(rh * 0.5)}px ${G}`; ctx.fillText(P.label, 30, y + rh / 2);
+    ctx.font = `500 ${Math.round(rh * 0.42)}px ${G}`; ctx.fillText(P.time + "〜", 210, y + rh / 2);
+    if (i <= done) {   // 出席の判（朱色の丸）
+      const cx = w - 70, cy = y + rh / 2, r = rh * 0.38;
+      ctx.save(); ctx.strokeStyle = "#c8262c"; ctx.fillStyle = "#c8262c"; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.textAlign = "center"; ctx.font = `700 ${Math.round(r * 1.1)}px ${G}`; ctx.fillText("出", cx, cy + 1); ctx.restore();
+    } else if (cur) { ctx.fillStyle = "#8a5a00"; ctx.textAlign = "right"; ctx.font = `700 ${Math.round(rh * 0.4)}px ${G}`; ctx.fillText("← いま", w - 26, y + rh / 2); }
+    ctx.fillStyle = "rgba(0,0,0,.18)"; ctx.fillRect(20, y + rh - 1, w - 40, 2);
+  }
+  ctx.fillStyle = "#333"; ctx.textAlign = "center"; ctx.font = `500 21px ${G}`;
+  ctx.fillText(`全${n}コマ続けて出席で修了。`, w / 2, h - 50);
+  ctx.fillText("判断を誤ると、判はすべて消えます。", w / 2, h - 22);
+}
+bakedMesh(new THREE.PlaneGeometry(1.05, 1.4, 2, 2), patch(new THREE.MeshBasicMaterial({ vertexColors: true, map: ttTex }), 0.12), M(ROOM.x0 + 0.012, 2.0, -1.8, Math.PI / 2), "room");
 
 // ---- 腰板（後方の通路の壁だけ） ----
 prop(box(0.02, 0.9, ROOM.z1 - ROOM.z0), M(ROOM.x1 - 0.011, TOP + 0.45, (ROOM.z0 + ROOM.z1) / 2), "panel", "room");
@@ -2792,22 +2856,36 @@ for (const [c, oy] of [[CF, 0], [CB, TOP]]) {
   addOccluder(bx - 0.58, bx + 0.58, bz - 0.18, bz + 0.18, oy, oy + 0.76);   // ゴミ箱
 }
 
-// ---- 扉を出たところ：節電のお知らせ（夜に廊下の灯りが消えるのは異変ではないことを示す） ----
-const savingTex = canvasTex(300, 424, (ctx, w, h) => {
+// ---- 扉を出たところ：廊下でのきまり（以前は節電のお知らせ。節電の消灯は 10/25 夜にやめた） ----
+function drawCorrNotice(ctx, w, h) {
   ctx.fillStyle = "#f4f2ec"; ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = "#1d5a8c"; ctx.fillRect(0, 0, w, 64);
+  ctx.fillStyle = "#24324a"; ctx.fillRect(0, 0, w, 64);
   ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.font = '700 30px "Zen Kaku Gothic New", sans-serif'; ctx.fillText("節電のお知らせ", w / 2, 33);
-  ctx.fillStyle = "#222"; ctx.font = '700 21px "Zen Kaku Gothic New", sans-serif'; ctx.textAlign = "left";
-  const L = ["18時以降は、廊下の", "照明の一部を", "消灯しています。"];
-  L.forEach((t, i) => ctx.fillText(t, 26, 120 + i * 34));
-  ctx.font = '400 16px "Zen Kaku Gothic New", sans-serif'; ctx.fillStyle = "#444";
-  ["ご不便をおかけしますが、", "ご協力をお願いします。"].forEach((t, i) => ctx.fillText(t, 26, 250 + i * 26));
-  ctx.textAlign = "right"; ctx.fillText("施設管理課", w - 24, h - 34);
-  ctx.fillStyle = "#c22"; ctx.beginPath(); ctx.arc(w / 2, 76, 5, 0, Math.PI * 2); ctx.fill();
-}, { clampS: true, clampT: true });
+  ctx.font = '700 30px "Zen Kaku Gothic New", sans-serif'; ctx.fillText("受講者の方へ", w / 2, 33);
+  ctx.fillStyle = "#222"; ctx.font = '700 22px "Zen Kaku Gothic New", sans-serif'; ctx.textAlign = "left";
+  ["廊下で異変に", "気づいたら、", "非常口から", "引き返すこと。"].forEach((t, i) => ctx.fillText(t, 26, 110 + i * 34));
+  ctx.font = '500 19px "Zen Kaku Gothic New", sans-serif'; ctx.fillStyle = "#333";
+  ["異変がなければ、", "そのまま進むこと。"].forEach((t, i) => ctx.fillText(t, 26, 270 + i * 28));
+  ctx.font = '400 16px "Zen Kaku Gothic New", sans-serif'; ctx.fillStyle = "#444"; ctx.textAlign = "right"; ctx.fillText("教務課", w - 24, h - 34);
+}
+const savingTex = canvasTex(300, 424, drawCorrNotice, { clampS: true, clampT: true });
 const savingMat = patch(new THREE.MeshBasicMaterial({ vertexColors: true, map: savingTex }), 0.15);
 for (const [x, y] of [[XF, 0], [XB, TOP]]) bakedMesh(new THREE.PlaneGeometry(0.3, 0.42, 1, 1), savingMat, M(x + 1.3, y + 1.5, WALL_T + 0.012), "corr");
+// 前扉から出て横通路を歩くと正面に見える壁にも、大きめの同じ掲示（前廊下の非常口の使い方）
+{ const nt = canvasTex(600, 848, (ctx, w, h) => { ctx.save(); ctx.scale(2, 2); drawCorrNotice(ctx, w / 2, h / 2); ctx.restore(); }, { clampS: true, clampT: true });
+  bakedMesh(new THREE.PlaneGeometry(0.6, 0.85, 1, 1), patch(new THREE.MeshBasicMaterial({ vertexColors: true, map: nt }), 0.15), M(XF - JOG - CW / 2 + 0.012, 1.5, (ZM0 + ZM1) / 2 - 0.6, Math.PI / 2), "corr"); }
+// ---- 教室の扉の上の案内板：前扉「進む」、後ろ扉「引き返す」（ルールを1文で：異変がなければ進む、あれば引き返す） ----
+function doorPlate(big, small, col) {
+  return canvasTex(512, 168, (ctx, w, h) => {
+    ctx.fillStyle = col; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.lineWidth = 5; ctx.strokeRect(9, 9, w - 18, h - 18);
+    ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = '900 76px "Zen Kaku Gothic New", sans-serif'; ctx.fillText(big, w / 2, 70);
+    ctx.font = '700 30px "Zen Kaku Gothic New", sans-serif'; ctx.fillText(small, w / 2, 132);
+  }, { clampS: true, clampT: true });
+}
+for (const [x, y, big, small, col] of [[XF, 0, "進む", "異変がなければ この扉から", "#1d6b45"], [XB, TOP, "引き返す", "異変を見つけたら この扉から", "#9b3a24"]])
+  bakedMesh(new THREE.PlaneGeometry(1.5, 0.49, 2, 1), patch(new THREE.MeshBasicMaterial({ vertexColors: true, map: doorPlate(big, small, col) }), 0.1), M(x, y + DOOR_H + 0.45, -0.015, Math.PI), "room");
 
 // ---- 前廊下：消火器・避難経路図 ----
 const SW = XF - CW / 2, SE = XF + CW / 2;       // 前扉スタブの左右の壁
@@ -3091,7 +3169,7 @@ for (const [c, oy] of [[CF, 0], [CB, TOP]]) for (const e of [-1, 1]) {
 }
 const frontSign = SIGNS.find(sg => sg.c === CF && sg.e === 1);
 {
-  // 非常口の奥に見える「後ろ扉前の廊下」の写し：後ろ扉・室名札・節電のお知らせ・掲示板・誘導灯・照明
+  // 非常口の奥に見える「後ろ扉前の廊下」の写し：後ろ扉・室名札・廊下でのきまりの掲示・掲示板・誘導灯・照明
   const dx = -EXIT_T.x, dy = -EXIT_T.y, dz = -EXIT_T.z;
   const base = new THREE.Matrix4().makeTranslation(XB + dx, TOP + dy, WALL_T / 2 + dz);
   const add = (geo, mat, px, py, pz) => { bake(geo, "door", base.clone().multiply(M(px, py, pz))); const m = new THREE.Mesh(geo, mat); m.position.set(XB + dx + px, TOP + dy + py, WALL_T / 2 + dz + pz); scene.add(m); };
@@ -3434,7 +3512,7 @@ const ANOMALIES = [
   { id: "board",             loc: "教室", subtle: 1, fear: 3, from: 8, name: "赤い成績",           desc: "黒板一面に、赤い字で「不可」「留年」「単位取得失敗」が書き殴られている。" },
   { id: "attendance",        loc: "教室", subtle: 1, fear: 3, from: 8, name: "黒板の出席表",       desc: "黒板一面に学籍番号がびっしり書かれ、すべてに「出」の印がある。ひとつだけ空いた欄が赤いチョークで囲まれ、「あと1名」と書き足されている。" }
 ];
-const state = { lecture: 1, streak: 0, anomaly: null, judged: false, final: false, last: null, startedAt: 0, periodStart: 0, mode: "loading", showAnswer: false, diff: "normal", found: 0, miss: 0 };
+const state = { retake: false, lecture: 1, streak: 0, anomaly: null, judged: false, final: false, last: null, startedAt: 0, periodStart: 0, mode: "loading", showAnswer: false, diff: "normal", found: 0, miss: 0 };
 // 学祭モード：5コマで 朝→昼→夕方→夜→深夜 を一通り体験できるよう、時間帯を割り当て直す
 let FEST = false;
 const FEST_MAP = [0, 1, 3, 5, 7, 8];
@@ -3517,20 +3595,32 @@ function applyAnomaly() {
   anomalyDesk.position.y = anomalyDeskY;
   stackedDesk.visible = a === "desk";
   FLICK.value = 1; flickLampMat.color.setHex(0xeef7ef);
-  const dark = a === "blackout";
+  // 再履修の補講（9・10限）は建物ごと停電：蛍光灯はすべて消え、非常照明のぼんやりした明かりと緑の誘導灯だけ（10/25 夜。作者の案）
+  const hojo = isHojo();
+  const dark = a === "blackout" || hojo;
   ROW.value = a === "back_lights" || dark ? 0 : 1; rowLampMat.color.setHex(a === "back_lights" || dark ? 0x2c2e2d : 0xeef7ef);
   roomLampMat.color.setHex(dark ? 0x2c2e2d : 0xeef7ef);
   // 時間帯：空・外光（時間による変化は異変ではない）
   const sky = a === "sky_mismatch" ? (band === "夜" || band === "深夜" ? "昼" : "深夜") : band;
   setSky(sky);
   const sun = SUN_BY_BAND[band]; SUN.value.set(sun[0], sun[1], sun[2]); DIM.value = dark ? 0.12 : DIM_BY_BAND[band];
-  const saving = band === "夜" || band === "深夜";
-  NIGHTL.value = saving ? 0 : 1; nightLampMat.color.setHex(saving ? 0x2c2e2d : 0xeef7ef);
+  NIGHTL.value = 1; nightLampMat.color.setHex(0xeef7ef);   // 節電の消灯はなし（10/25 夜。作者「分かりにくい」）
+  CDIM.value = CDIM_BY_BAND[band] ?? 1;
+  lampMat.color.setHex(0xeef7ef);
+  if (hojo) {
+    if (a !== "blackout") DIM.value = HOJO_DIM;
+    CDIM.value = HOJO_DIM; FLICK.value = 0; ROW.value = 0; NIGHTL.value = 0;
+    for (const m of [lampMat, flickLampMat, rowLampMat, roomLampMat, nightLampMat]) m.color.setHex(0x2c2e2d);
+  }
   panes[2].material.uniforms.uFig.value = a === "window_silhouette" ? 1 : 0;
   queueTexDraw(boardTex, drawBoard);
+  queueTexDraw(ttTex, drawTimetable);
   if (typeof hqLightUpdate === "function") hqLightUpdate();
   updateAnswer();
 }
+// 補講（再履修の9・10限）：停電している。灯りの異変は出せない（もう消えている）
+const HOJO_DIM = 0.2, HOJO_EXCLUDE = ["blackout", "back_lights", "flicker"];
+function isHojo() { return !FEST && !state.epilogue && !state.final && lecturePeriod(state.lecture).idx >= 9; }
 function pickAnomaly() {
   const p = lecturePeriod(state.lecture).idx, wts = DIFFS[state.diff].weight;
   const night = Math.max(0, (p - 4) / 4);   // 5限以降、怖い異変の比重が上がっていく
@@ -3538,6 +3628,7 @@ function pickAnomaly() {
   let total = 0;
   for (const a of ANOMALIES) {
     if (a.from > p || a.id === state.last) continue;
+    if (p >= 9 && HOJO_EXCLUDE.includes(a.id)) continue;
     if (state.exclude && state.exclude.includes(a.id)) continue;
     if (NO_AUDIO && a.audio) continue;   // 「音の異変を出さない」設定
     let w = wts[a.subtle] || 0;
@@ -3571,6 +3662,7 @@ function judge(forward) {
   const correct = (had === null) === forward;
   logStep(state.lecture, had, correct);
   if (!correct && helpOn()) { helpAddMiss(state.lecture, had); showMissNotice(had); }
+  state.retake = !correct;   // 誤った直後のコマは黒板に「再受講」
   if (correct) {
     if (had) { discover(had); state.found++; }
     state.streak++;
@@ -3593,7 +3685,7 @@ function judge(forward) {
 const SPAWN = { x: ROOM.x1 - 0.8, z: -8, ry: Math.PI / 2 };   // 最上段の通路から教壇を見下ろす
 function resetRun() {
   logFinish(false); hideMissNotice(); helpClear();
-  Object.assign(state, { lecture: 1, streak: 0, anomaly: null, judged: false, final: false, last: null, startedAt: performance.now(), periodStart: performance.now(), found: 0, miss: 0, festPlan: null, festSeen: null, festCorr: null, epilogue: false, dbgRun: false });
+  Object.assign(state, { retake: false, lecture: 1, streak: 0, anomaly: null, judged: false, final: false, last: null, startedAt: performance.now(), periodStart: performance.now(), found: 0, miss: 0, festPlan: null, festSeen: null, festCorr: null, epilogue: false, dbgRun: false });
   Object.assign(PASS, { uses: 0, lastUse: -9, festDone: false });   // 暗い通路の怪異は受講ごとに数え直す（学祭は次の人にも起きるように）
   if (FEST) planFest();
   resetStory();
@@ -3867,10 +3959,13 @@ document.addEventListener("pointerlockchange", () => {
 // 12. UI
 // ============================================================================
 const $ = (id) => document.getElementById(id);
+$("slot-comfort-title").appendChild($("comfort-box"));   // 最初はタイトルに出す
 const ui = { title: $("title"), pause: $("pause"), archive: $("archive"), ending: $("ending"), records: $("records"), hud: $("hud") };
 let archiveReturn = "title";
 function show(name) {
   if (name === "title" && ui.title.hidden) titleShownAt = performance.now();
+  // 酔い対策の設定は、タイトルと一時停止の両方で同じ部品を使う（開く画面へ移す）
+  if (name === "title" || name === "pause") { const box = $("comfort-box"), slot = $("slot-comfort-" + name); if (box && slot && box.parentNode !== slot) slot.appendChild(box); }
   for (const k of ["title", "pause", "archive", "ending", "records"]) ui[k].hidden = k !== name;
   ui.hud.hidden = name !== null;
 }
@@ -4711,10 +4806,10 @@ function drawGuide(ctx, w, h) {
   col(60, "受講上の注意");
   const [five, six] = handoutRules((FEST ? "fest" : state.diff) + "|" + goal());
   const rules = [
-    "一、講義室と、前扉の外の廊下をよく観察すること。",
-    "二、異変がなければ、前扉から出て廊下を進むこと。",
-    "三、異変を見つけたら引き返すこと。教室にいるときは後ろ扉から、廊下にいるときは非常口から戻る。",
-    "四、窓の外の時刻や明るさ、夜の廊下の消灯は、異変ではない。",
+    "一、異変がなければ「進む」、あれば「引き返す」。扉の上の案内板に従うこと。",
+    "二、進む＝前扉から出て廊下を進む。引き返す＝教室では後ろ扉から、廊下では非常口から戻る。",
+    "三、1限目に異変はない。講義室と廊下をよく見て覚えること。進んだコマは黒板の横の時間割に判が押される。",
+    "四、窓の外の時刻や明るさの変化は、異変ではない。",
     five, six,
     ...(helpOn() ? ["七、判断を誤ると、教室の後ろの壁の掲示板に記録が貼られる（記録が増えるのは異変ではない）。"] : [])
   ];
@@ -4803,14 +4898,15 @@ function vrMenuItems() {
     ];
   }
   return [
+    // 遊ぶ人向け（再開・ルール・酔い対策・やり直し・終了）→ 最後にスタッフ向け
     ["再開する", () => closeVrMenu()],
-    dashItem(), turnItem(), vignetteItem(),
-    [`お助け掲示板：${helpOn() ? "オン" : "オフ"}`, () => { setHelp(!helpOn()); drawVrMenu(); }],
     ["ルールと操作を見る", () => { closeVrMenu(); openGuide(false); }],
+    turnItem(), vignetteItem(), dashItem(),
     ["1限目からやり直す", () => { closeVrMenu(); resetRun(); startIntro(); }],
-    [`重さの表示：${PERF.on ? "オン" : "オフ"}`, () => { setPerf(!PERF.on); drawVrMenu(); }],
-    [`画質：${HQ.on ? "高画質" : "以前の見た目"}`, () => { setHQ(!HQ.on); drawVrMenu(); }],
-    ["VRを終了する", () => { closeVrMenu(); renderer.xr.getSession()?.end(); }]
+    ["VRを終了する", () => { closeVrMenu(); renderer.xr.getSession()?.end(); }],
+    [`（スタッフ）お助け掲示板：${helpOn() ? "オン" : "オフ"}`, () => { setHelp(!helpOn()); drawVrMenu(); }],
+    [`（スタッフ）画質：${HQ.on ? "高画質" : "以前の見た目"}`, () => { setHQ(!HQ.on); drawVrMenu(); }],
+    [`（スタッフ）重さの表示：${PERF.on ? "オン" : "オフ"}`, () => { setPerf(!PERF.on); drawVrMenu(); }]
   ];
 }
 function drawVrMenu() {
@@ -5397,7 +5493,7 @@ function pcQuality(fps) {
 }
 HQ_HOOKS.push(applyPixelRatio);
 // 高画質の光は、朝・昼・夕方だけ。夜・深夜（怖さの本番）は以前とまったく同じ光にする（作者：画質より怖さを重視）
-//  切り替わるのは限が変わる瞬間（ワープ）で、そのとき廊下の節電消灯も起きるので目立たない
+//  切り替わるのは限が変わる瞬間（ワープ）で、そのとき夜の廊下も暗くなるので目立たない
 function hqLightUpdate() {
   const band = currentBand();
   HQL.value = HQU.value > 0.5 && band !== "夜" && band !== "深夜" ? 1 : 0;
@@ -5430,7 +5526,7 @@ function lampWeight(L) {
   if (L.row) return ROW.value;
   if (L.night) return NIGHTL.value;
   if (L.zone === "room") return roomLampMat.color.r > 0.5 ? 1 : 0;
-  return 1;
+  return lampMat.color.r > 0.5 ? 1 : 0;   // 補講の停電では廊下の灯りも映らない
 }
 const GLOSS_VIS = new Map();   // 蛍光灯ごとの「見えるか」の結果（4フレームごとに計算し直す）
 let glossFrame = 0;
