@@ -2483,7 +2483,11 @@ const nightLampMat = new THREE.MeshBasicMaterial({ color: 0xeef7ef });
 for (const lm of [lampMat, flickLampMat, rowLampMat, roomLampMat, nightLampMat]) lampGlow(lm);
 // 蛍光灯の管は、光り方（材質）ごとに1つの形にまとめて描く（1本ずつだと描画命令が40回以上増え、Quest では重い）
 const TUBES = new Map();
-function addTube(geo, mat, x, y, z) { geo.translate(x, y, z); if (!TUBES.has(mat)) TUBES.set(mat, []); TUBES.get(mat).push(geo); }
+const TUBE_INFO = [];   // 高画質の光のにじみ用：管の位置・向き・長さ
+function addTube(geo, mat, x, y, z) {
+  const P = geo.parameters || {}; TUBE_INFO.push({ mat, x, y, z, ax: (P.width || 0) > (P.depth || 0) ? "x" : "z", len: Math.max(P.width || 0, P.depth || 0) });
+  geo.translate(x, y, z); if (!TUBES.has(mat)) TUBES.set(mat, []); TUBES.get(mat).push(geo);
+}
 for (const L of LAMPS) {
   const along = L.axis === "x", len = L.zone === "room" ? 1.6 : 1.2;
   prop(along ? box(len + 0.12, 0.05, 0.26) : box(0.26, 0.05, len + 0.12), M(L.x, L.ceilY - 0.025, L.z), "housing", L.zone);
@@ -2992,6 +2996,56 @@ const frontSign = SIGNS.find(sg => sg.c === CF && sg.e === 1);
   }
 }
 for (const [mat, list] of TUBES) { const m = new THREE.Mesh(mergeGeosSimple(list), mat); m.frustumCulled = false; scene.add(m); }
+// ---- 高画質：蛍光灯のまわりの光のにじみ（VR用。PC は画面効果のにじみがあるので、画面効果を使わないときだけ） ----
+//  管ごとに、こちらを向いた細長いぼかしの板を置く（管の向きに伸びる）。光り方（材質）ごとに1つにまとめ、
+//  その材質の色（消灯・停電・明滅で変わる）に合わせて明るさを毎フレーム変える。板は少しこちら側に寄せて、天井に切られないようにする
+const HALO_GROUPS = [];
+{
+  const haloMat = (mat) => new THREE.ShaderMaterial({
+    uniforms: { uCol: { value: new THREE.Color() }, uI: { value: 0 }, uW: { value: 0.32 } },
+    vertexShader: `attribute vec3 aC; attribute vec3 aAx; attribute vec2 aK; uniform float uW; varying vec2 vK;
+      void main() {
+        vec4 cv = viewMatrix * modelMatrix * vec4(aC, 1.0);
+        vec2 ax = (viewMatrix * vec4(aAx, 0.0)).xy; float la = length(ax);
+        vec2 dir = la > 1e-4 ? ax / la : vec2(1.0, 0.0), per = vec2(-dir.y, dir.x);
+        float near = clamp((-cv.z - 0.4) / 1.5, 0.0, 1.0);                 // 近すぎるときは小さく（目の前に板が来ないように）
+        cv.xy += (dir * aK.x * (la + uW) + per * aK.y * uW) * near;
+        cv.z = min(cv.z + 0.6, -0.35);                                    // 天井に切られないよう、少しこちらへ
+        vK = aK; gl_Position = projectionMatrix * cv;
+      }`,
+    fragmentShader: `uniform vec3 uCol; uniform float uI; varying vec2 vK;
+      void main() { float d2 = dot(vK, vK); float g = max(0.0, 1.0 - d2); g = g * g * (0.35 + 0.65 * exp(-d2 * 6.0)); gl_FragColor = vec4(uCol * g * uI, 1.0); }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false
+  });
+  const byMat = new Map();
+  for (const t of TUBE_INFO) { if (!byMat.has(t.mat)) byMat.set(t.mat, []); byMat.get(t.mat).push(t); }
+  for (const [mat, list] of byMat) {
+    const n = list.length, C = new Float32Array(n * 12), A = new Float32Array(n * 12), K = new Float32Array(n * 8), idx = [];
+    list.forEach((t, i) => {
+      const hl = t.len / 2 + 0.1;
+      for (let c = 0; c < 4; c++) {
+        C.set([t.x, t.y - 0.03, t.z], (i * 4 + c) * 3);
+        A.set(t.ax === "x" ? [hl, 0, 0] : [0, 0, hl], (i * 4 + c) * 3);
+        K.set([c === 1 || c === 2 ? 1 : -1, c >= 2 ? 1 : -1], (i * 4 + c) * 2);
+      }
+      idx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3);
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(C.slice(), 3)); g.setAttribute("aC", new THREE.BufferAttribute(C, 3));
+    g.setAttribute("aAx", new THREE.BufferAttribute(A, 3)); g.setAttribute("aK", new THREE.BufferAttribute(K, 2)); g.setIndex(idx);
+    const m = new THREE.Mesh(g, haloMat(mat)); m.frustumCulled = false; m.renderOrder = 2; m.visible = false; scene.add(m);
+    HALO_GROUPS.push({ mesh: m, src: mat, k: list[0].len > 1.4 ? 0.38 : 0.32 });
+  }
+}
+function updateHalos(postOn) {
+  const on = HQU.value > 0.5 && !postOn;
+  for (const h of HALO_GROUPS) {
+    const c = h.src.color, lum = Math.max(0, Math.min(1, (Math.max(c.r, c.g, c.b) - 0.25) / 0.68));
+    const I = on ? h.k * lum * GDIM.value : 0;
+    h.mesh.visible = I > 0.003;
+    if (h.mesh.visible) { h.mesh.material.uniforms.uI.value = I; h.mesh.material.uniforms.uCol.value.setRGB(0.92, 1.0, 0.95); }
+  }
+}
 
 
 
@@ -3082,7 +3136,7 @@ function layoutShafts(band) {
   }
 }
 function updateShafts() {
-  const band = skyBand, on = HQU.value > 0.5 && !renderer.xr.isPresenting && !blindsSlammed && state.anomaly !== "blackout";
+  const band = skyBand, on = HQU.value > 0.5 && !renderer.xr.isPresenting && !DEBUG.vrLook && !blindsSlammed && state.anomaly !== "blackout";
   const k = { "朝": 0.5, "昼": 0.24, "夕方": 0.7, "夜": 0.3, "深夜": 0 }[band] ?? 0;
   shaftMat.uniforms.uCol.value.copy(SUN.value).multiplyScalar(k);
   shaftGroup.visible = on && k > 0 && SUN.value.x + SUN.value.y + SUN.value.z > 0.05;
@@ -4703,7 +4757,7 @@ function vrSelect() {   // トリガー
 // ============================================================================
 // 12b. デバッグメニュー（F2）
 // ============================================================================
-const DEBUG = { open: false, used: false, freeze: false, fast: false, noclip: false, reveal: false, passage: null };
+const DEBUG = { open: false, used: false, freeze: false, fast: false, noclip: false, reveal: false, passage: null, vrLook: false };   // vrLook：テスト用。PCで「VRと同じ描き方」（画面効果なし・光の筋なし）にする
 // 各異変を確認しやすい立ち位置 [立つ x, 立つ z, 見る x, 見る y, 見る z]
 const FIG_Y = (FIG_T + 1) * R;
 const VIEWS = {
@@ -5306,7 +5360,7 @@ function renderFrame() {
   updateShafts();
   updateZoneCull();
   updateGloss();
-  const xr = renderer.xr.isPresenting, st = GFX.style;
+  const xr = renderer.xr.isPresenting || DEBUG.vrLook, st = GFX.style;
   const night = NIGHT_BY_BAND[currentBand()] ?? 0;
   camera.getWorldPosition(camWorld);
   dustMat.uniforms.uTime.value = GFX.time; WIN_TIME.value = GFX.time; dustMat.uniforms.uCam.value.copy(camWorld).sub(DUST_OFF);
@@ -5314,11 +5368,12 @@ function renderFrame() {
   dustMat.uniforms.uAlpha.value = (st === "B" ? 0.28 : st === "C" ? 0.16 : 0.38) * (1 - 0.45 * night);
   const mode = st === "A" || st === "C" ? 1 : st === "B" ? 2 : 0;
   LAMP_BOOST.value = !xr && mode === 1 ? 2.2 : 1;
+  updateHalos(!xr && mode === 1);
   if (xr || (mode === 0 && GFX.bright === 1)) {
     SNAP.value.set(0, 0);
     // VR中は three.js がフレームの頭でヘッドセットの描画先を設定している。ここで null に戻すと
     // ふつうの画面（見えないキャンバス）に描いてしまい、ヘッドセットは真っ暗になる
-    if (!xr) renderer.setRenderTarget(null);
+    if (!renderer.xr.isPresenting) renderer.setRenderTarget(null);
     renderer.render(scene, camera);
     return;
   }
@@ -5421,7 +5476,7 @@ window.__fl = {
   CLIMAX, DOORS, EXIT, EXIT_T, EXF, K: { CF, CB, XF, XB, LEG_Z0, LEG_Z1, ROOM, SPAWN, SHIFT_X }, openExit, nearExit, DUST_OFF, exitPatch, exitHoleInView,
   goView(id, lecture) { state.final = false; state.lecture = lecture; state.anomaly = id; state.judged = false; applyAnomaly(); debugGoAnomaly(); },
   gfx(style, t) { GFX.style = style; applyGfx(); if (t !== undefined) { GFX.frozen = true; GFX.time = t; } },
-  GFX, ZONE_CULL, updateZoneCull, xrTargetFps, HQ, setHQ, applyHQ, BNC, LM_SETS, bounceAt, lightAt, shaftGroup, shaftMat, SHAFTS
+  GFX, ZONE_CULL, updateZoneCull, xrTargetFps, HQ, setHQ, applyHQ, BNC, LM_SETS, bounceAt, lightAt, shaftGroup, shaftMat, SHAFTS, HALO_GROUPS, updateHalos
 };
 
 // ============================================================================
