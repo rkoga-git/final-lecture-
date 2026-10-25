@@ -710,6 +710,7 @@ const ROW = { value: 1 };
 const SUN = { value: new THREE.Vector3(0.5, 0.56, 0.62) };
 const GDIM = { value: 1 };     // 全体の明るさ（非常口の扉が閉まった瞬間の一瞬の明滅に使う）
 const HQU = { value: 0 };      // 高画質（はね返りの光など）を使うか。1＝使う。0 のときは以前とまったく同じ計算になる
+const HQL = { value: 0 };      // 高画質の「光」（はね返り・深い暗がり）を使うか。怖さを残すため、夜・深夜は使わない（以前と同じ光）。木目・蛍光灯のにじみは HQU
 const NIGHTL = { value: 1 };   // 節電で消える廊下の灯り（1=点灯、0=消灯）
 const DIM = { value: 1 };   // 教室だけ夜ほど少し暗くする（廊下は時間で変えない）
 const GRIME = { value: 0 }, AOU = { value: 0 }, SNAP = { value: new THREE.Vector2(0, 0) };
@@ -831,11 +832,11 @@ function patch(mat, gk = 0.5, snap = true, lm = false, gloss = 0) {
       sh.vertexShader = "#define USE_LM\nattribute vec2 aLM;\nvarying vec2 vLM;\nvarying float vRoomLM;\n" + sh.vertexShader;
       sh.fragmentShader = "#define USE_LM\n" + sh.fragmentShader;
     }
-    sh.uniforms.uFlick = FLICK; sh.uniforms.uRow = ROW; sh.uniforms.uSun = SUN; sh.uniforms.uDim = DIM; sh.uniforms.uHQ = HQU;
+    sh.uniforms.uFlick = FLICK; sh.uniforms.uRow = ROW; sh.uniforms.uSun = SUN; sh.uniforms.uDim = DIM; sh.uniforms.uHQ = HQU; sh.uniforms.uHQL = HQL;
     sh.uniforms.uAO = AOU; sh.uniforms.uGDim = GDIM; sh.uniforms.uNightL = NIGHTL; sh.uniforms.uSnap = SNAP; sh.uniforms.uGrime = GRIME; sh.uniforms.uGK = GK; sh.uniforms.uSnapK = SK;
-    sh.vertexShader = "attribute vec3 aBnc;\nattribute vec4 aBnc2;\nuniform float uHQ;\nattribute float aFlick;\nattribute float aRow;\nattribute float aSun;\nattribute float aRoom;\nattribute float aAO;\nuniform float uGDim;\nattribute float aNightL;\nuniform float uNightL;\nattribute vec4 aGP;\nattribute vec3 aGN;\nuniform float uFlick;\nuniform float uRow;\nuniform vec3 uSun;\nuniform float uDim;\nuniform float uAO;\nuniform vec2 uSnap;\nuniform float uSnapK;\nvarying vec4 vGP;\nvarying vec3 vGN;\n" +
+    sh.vertexShader = "attribute vec3 aBnc;\nattribute vec4 aBnc2;\nuniform float uHQ;\nuniform float uHQL;\nattribute float aFlick;\nattribute float aRow;\nattribute float aSun;\nattribute float aRoom;\nattribute float aAO;\nuniform float uGDim;\nattribute float aNightL;\nuniform float uNightL;\nattribute vec4 aGP;\nattribute vec3 aGN;\nuniform float uFlick;\nuniform float uRow;\nuniform vec3 uSun;\nuniform float uDim;\nuniform float uAO;\nuniform vec2 uSnap;\nuniform float uSnapK;\nvarying vec4 vGP;\nvarying vec3 vGN;\n" +
       sh.vertexShader.replace("#include <color_vertex>",
-        "#include <color_vertex>\n#ifdef USE_COLOR\n vColor.rgb *= mix(1.0, uDim, aRoom);\n if (uHQ > 0.5) vColor.rgb += aBnc * mix(1.0, uDim, aRoom) + aBnc2.x * uFlick * vec3(0.9, 1.0, 0.94) + aBnc2.y * uRow * vec3(1.0, 0.97, 0.9) + aBnc2.z * uSun + aBnc2.w * uNightL * vec3(0.9, 1.0, 0.94);\n vColor.rgb += aFlick * uFlick * vec3(0.9, 1.0, 0.94) + aRow * uRow * vec3(1.0, 0.97, 0.9) + aSun * uSun + aNightL * uNightL * vec3(0.9, 1.0, 0.94);\n vColor.rgb *= mix(1.0, aAO > 0.001 ? aAO : 1.0, uAO) * uGDim;\n if (uHQ > 0.5) vColor.rgb *= mix(1.0, aAO > 0.001 ? aAO : 1.0, uAO * 0.7);\n#endif\n vGP = aGP; vGN = aGN;\n#ifdef USE_LM\n vLM = aLM; vRoomLM = aRoom;\n#endif")
+        "#include <color_vertex>\n#ifdef USE_COLOR\n vColor.rgb *= mix(1.0, uDim, aRoom);\n if (uHQL > 0.5) vColor.rgb += aBnc * mix(1.0, uDim, aRoom) + aBnc2.x * uFlick * vec3(0.9, 1.0, 0.94) + aBnc2.y * uRow * vec3(1.0, 0.97, 0.9) + aBnc2.z * uSun + aBnc2.w * uNightL * vec3(0.9, 1.0, 0.94);\n vColor.rgb += aFlick * uFlick * vec3(0.9, 1.0, 0.94) + aRow * uRow * vec3(1.0, 0.97, 0.9) + aSun * uSun + aNightL * uNightL * vec3(0.9, 1.0, 0.94);\n vColor.rgb *= mix(1.0, aAO > 0.001 ? aAO : 1.0, uAO) * uGDim;\n if (uHQL > 0.5) vColor.rgb *= mix(1.0, aAO > 0.001 ? aAO : 1.0, uAO * 0.7);\n#endif\n vGP = aGP; vGN = aGN;\n#ifdef USE_LM\n vLM = aLM; vRoomLM = aRoom;\n#endif")
       .replace("#include <project_vertex>", "#include <project_vertex>\n if (uSnap.x > 0.0 && uSnapK > 0.5) { gl_Position.xy = floor(gl_Position.xy / gl_Position.w * uSnap + 0.5) / uSnap * gl_Position.w; }");
     sh.fragmentShader = sh.fragmentShader.replace("#define USE_LM\n", "");
     sh.fragmentShader = (lm ? "#define USE_LM\n" : "") + (gloss > 0 ? "#define USE_GLOSS\n" : "") + (det ? "#define USE_DETAIL\n" : "") + LM_FRAG_HEAD + GLOSS_FRAG_HEAD + DETAIL_FRAG_HEAD + GRIME_GLSL + sh.fragmentShader.replace("#include <color_fragment>", "#include <color_fragment>\n" + LM_FRAG_BODY + " if (uGrime > 0.0) diffuseColor.rgb = grime(diffuseColor.rgb);\n" + GLOSS_FRAG_BODY + DETAIL_FRAG_BODY);
@@ -1223,7 +1224,7 @@ function lmLoadPrebaked(pb) {
 // 光の絵は2組：ふだん（以前と同じ）と高画質（はね返りの光つき）。画質の切り替えは、どちらの絵を使うかを差し替えるだけ（重さは同じ）
 const LM_SETS = { base: null, hq: null };
 function lmUse() {
-  const ts = (HQU.value > 0.5 && LM_SETS.hq) || LM_SETS.base; if (!ts) return;
+  const ts = (HQL.value > 0.5 && LM_SETS.hq) || LM_SETS.base; if (!ts) return;
   LM_U.t0.value = ts[0]; LM_U.t1.value = ts[1]; LM_U.t2.value = ts[2];
 }
 function lmFinish() {   // buildShell と出口の板を作ったあとに呼ぶ
@@ -3038,10 +3039,10 @@ const HALO_GROUPS = [];
   }
 }
 function updateHalos(postOn) {
-  const on = HQU.value > 0.5 && !postOn;
+  const on = HQU.value > 0.5 && !postOn, band = currentBand(), nightK = band === "夜" || band === "深夜" ? 0.6 : 1;   // 夜は控えめに（暗さを残す）
   for (const h of HALO_GROUPS) {
     const c = h.src.color, lum = Math.max(0, Math.min(1, (Math.max(c.r, c.g, c.b) - 0.25) / 0.68));
-    const I = on ? h.k * lum * GDIM.value : 0;
+    const I = on ? h.k * lum * GDIM.value * nightK : 0;
     h.mesh.visible = I > 0.003;
     if (h.mesh.visible) { h.mesh.material.uniforms.uI.value = I; h.mesh.material.uniforms.uCol.value.setRGB(0.92, 1.0, 0.95); }
   }
@@ -3408,6 +3409,7 @@ function applyAnomaly() {
   NIGHTL.value = saving ? 0 : 1; nightLampMat.color.setHex(saving ? 0x2c2e2d : 0xeef7ef);
   panes[2].material.uniforms.uFig.value = a === "window_silhouette" ? 1 : 0;
   queueTexDraw(boardTex, drawBoard);
+  if (typeof hqLightUpdate === "function") hqLightUpdate();
   updateAnswer();
 }
 function pickAnomaly() {
@@ -5159,7 +5161,7 @@ const POST = (() => {
       if (uHQf > 0.5 && uMode < 1.5) {
         // 高画質：写真のような明るさの出し方（暗い所はより暗く締まり、中間は少し明るく、まぶしい所は白く飛ばずになめらかに）
         vec3 a = max(col, 0.0) * 0.85;
-        col = mix(col, clamp((a * (2.51 * a + 0.03)) / (a * (2.43 * a + 0.59) + 0.14), 0.0, 1.0), 0.75);
+        col = mix(col, clamp((a * (2.51 * a + 0.03)) / (a * (2.43 * a + 0.59) + 0.14), 0.0, 1.0), 0.75 * (1.0 - uNight));   // 夜ほど弱く（深夜は使わない）：暗がりを持ち上げない
       }
       vec3 s = toSRGB(col);
       if (uMode > 0.5 && uMode < 1.5) {
@@ -5253,9 +5255,16 @@ const HQ_KEY = "final-lecture-hq-v1";
 const HQ = { on: true };
 try { const v = localStorage.getItem(HQ_KEY); if (v === "0" || v === "1") HQ.on = v === "1"; } catch (e) { /* 既定は高画質 */ }
 const HQ_HOOKS = [];   // 高画質の切り替えで、ほかに変える物（質感など）
+// 高画質の光は、朝・昼・夕方だけ。夜・深夜（怖さの本番）は以前とまったく同じ光にする（作者：画質より怖さを重視）
+//  切り替わるのは限が変わる瞬間（ワープ）で、そのとき廊下の節電消灯も起きるので目立たない
+function hqLightUpdate() {
+  const band = currentBand();
+  HQL.value = HQU.value > 0.5 && band !== "夜" && band !== "深夜" ? 1 : 0;
+  lmUse();
+}
 function applyHQ() {
   HQU.value = HQ.on ? 1 : 0;
-  lmUse();
+  hqLightUpdate();
   for (const f of HQ_HOOKS) f(HQ.on);
   for (const id of ["chk-hq", "chk-hq2"]) { const el = $(id); if (el) el.checked = HQ.on; }
 }
@@ -5476,7 +5485,7 @@ window.__fl = {
   CLIMAX, DOORS, EXIT, EXIT_T, EXF, K: { CF, CB, XF, XB, LEG_Z0, LEG_Z1, ROOM, SPAWN, SHIFT_X }, openExit, nearExit, DUST_OFF, exitPatch, exitHoleInView,
   goView(id, lecture) { state.final = false; state.lecture = lecture; state.anomaly = id; state.judged = false; applyAnomaly(); debugGoAnomaly(); },
   gfx(style, t) { GFX.style = style; applyGfx(); if (t !== undefined) { GFX.frozen = true; GFX.time = t; } },
-  GFX, ZONE_CULL, updateZoneCull, xrTargetFps, HQ, setHQ, applyHQ, BNC, LM_SETS, bounceAt, lightAt, shaftGroup, shaftMat, SHAFTS, HALO_GROUPS, updateHalos
+  GFX, ZONE_CULL, updateZoneCull, xrTargetFps, HQ, setHQ, applyHQ, BNC, LM_SETS, HQL, HQU, bounceAt, lightAt, shaftGroup, shaftMat, SHAFTS, HALO_GROUPS, updateHalos
 };
 
 // ============================================================================
