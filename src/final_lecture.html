@@ -325,6 +325,7 @@ button:focus-visible { outline: 2px solid var(--blood); outline-offset: 2px; }
       <div class="gfx">
         <label class="bright">画面の明るさ <input type="range" id="gfx-bright" min="0.6" max="1.6" step="0.05" value="1"> <small>暗い部屋では少し上げてください</small></label>
       </div>
+      <label class="fest"><input type="checkbox" id="chk-hq" checked><span>高画質 <small>光の回り込み・質感。重い・見にくいと感じたら外すと以前の見た目に戻ります</small></span></label>
       <label class="fest"><input type="checkbox" id="chk-fest"><span>学祭モード <small>5限でクリア（約5分）。朝から深夜までを5コマで駆け抜けます</small></span></label>
       <label class="fest"><input type="checkbox" id="chk-help"><span>お助け掲示板 <small>判断を誤ると、教室の後ろの掲示板に見逃した異変が貼られます</small></span></label>
       <div class="actions">
@@ -353,6 +354,7 @@ button:focus-visible { outline: 2px solid var(--blood); outline-offset: 2px; }
       <button id="btn-totitle" type="button">タイトルへ戻る</button>
       <div class="row"><label for="sens">マウス感度</label><input id="sens" type="range" min="0.4" max="2.5" step="0.05" value="1"></div>
       <div class="row"><label for="chk-noaudio">音の異変を出さない</label><input id="chk-noaudio" type="checkbox"></div>
+      <div class="row"><label for="chk-hq2">高画質（外すと以前の見た目）</label><input id="chk-hq2" type="checkbox" checked></div>
       <div class="row"><label for="chk-dash">ダッシュを使う</label><input id="chk-dash" type="checkbox" checked></div>
       <div class="row"><label for="chk-vignette">酔い止めの縁取り（VR）</label><input id="chk-vignette" type="checkbox"></div>
       <div class="row"><label for="chk-snap">向きを30°ずつ変える（VR）</label><input id="chk-snap" type="checkbox"></div>
@@ -707,6 +709,7 @@ const FLICK = { value: 1 };
 const ROW = { value: 1 };
 const SUN = { value: new THREE.Vector3(0.5, 0.56, 0.62) };
 const GDIM = { value: 1 };     // 全体の明るさ（非常口の扉が閉まった瞬間の一瞬の明滅に使う）
+const HQU = { value: 0 };      // 高画質（はね返りの光など）を使うか。1＝使う。0 のときは以前とまったく同じ計算になる
 const NIGHTL = { value: 1 };   // 節電で消える廊下の灯り（1=点灯、0=消灯）
 const DIM = { value: 1 };   // 教室だけ夜ほど少し暗くする（廊下は時間で変えない）
 const GRIME = { value: 0 }, AOU = { value: 0 }, SNAP = { value: new THREE.Vector2(0, 0) };
@@ -795,13 +798,30 @@ const GLOSS_FRAG_BODY = `
  }
 #endif
 `;
+const DETAIL_FRAG_HEAD = `
+#ifdef USE_DETAIL
+uniform sampler2D tDetail; uniform vec2 uDetS; uniform float uDetK; uniform float uHQ;
+#endif
+`;
+const DETAIL_FRAG_BODY = `
+#ifdef USE_DETAIL
+ if (uHQ > 0.5) {
+   vec3 an = abs(vGN);
+   vec2 duv = an.y > 0.5 ? vGP.zx : (an.x > 0.5 ? vGP.zy : vGP.xy);
+   float dt = texture2D(tDetail, duv * uDetS).r;
+   diffuseColor.rgb *= 1.0 + (dt - 0.5) * uDetK;
+ }
+#endif
+`;
 function patch(mat, gk = 0.5, snap = true, lm = false, gloss = 0) {
   const GK = { value: gk }, SK = { value: snap ? 1 : 0 };
   mat.userData.grimeK = GK;
   // three.js は onBeforeCompile の中身が同じ素材どうしでシェーダーを使い回すので、ライトマップ・つやの有無で区別する
   //（区別しないと、壁や天井が床のつやのシェーダーを使ってしまう）
-  mat.customProgramCacheKey = () => `patch:lm${lm ? 1 : 0}:gloss${gloss > 0 ? 1 : 0}`;
+  mat.customProgramCacheKey = () => `patch:lm${lm ? 1 : 0}:gloss${gloss > 0 ? 1 : 0}:det${mat.userData.detail ? 1 : 0}`;
   mat.onBeforeCompile = (sh) => {
+    const det = mat.userData.detail;   // 高画質の質感（木目・布目）：面の向きに合わせて、ゲーム内の位置から模様を貼る
+    if (det) { sh.uniforms.tDetail = { value: det.tex }; sh.uniforms.uDetS = { value: new THREE.Vector2(det.su, det.sv) }; sh.uniforms.uDetK = { value: det.k }; sh.uniforms.uHQ = HQU; }
     if (gloss > 0) {
       sh.uniforms.uGL = GLOSS.L; sh.uniforms.uGA = GLOSS.A; sh.uniforms.uGloss = { value: gloss }; sh.uniforms.uGlossOn = GLOSS.on;
       sh.vertexShader = "#define USE_GLOSS\nvarying vec3 vWorldG;\n" + sh.vertexShader.replace("#include <project_vertex>", "#include <project_vertex>\n vWorldG = (modelMatrix * vec4(transformed, 1.0)).xyz;");
@@ -811,14 +831,14 @@ function patch(mat, gk = 0.5, snap = true, lm = false, gloss = 0) {
       sh.vertexShader = "#define USE_LM\nattribute vec2 aLM;\nvarying vec2 vLM;\nvarying float vRoomLM;\n" + sh.vertexShader;
       sh.fragmentShader = "#define USE_LM\n" + sh.fragmentShader;
     }
-    sh.uniforms.uFlick = FLICK; sh.uniforms.uRow = ROW; sh.uniforms.uSun = SUN; sh.uniforms.uDim = DIM;
+    sh.uniforms.uFlick = FLICK; sh.uniforms.uRow = ROW; sh.uniforms.uSun = SUN; sh.uniforms.uDim = DIM; sh.uniforms.uHQ = HQU;
     sh.uniforms.uAO = AOU; sh.uniforms.uGDim = GDIM; sh.uniforms.uNightL = NIGHTL; sh.uniforms.uSnap = SNAP; sh.uniforms.uGrime = GRIME; sh.uniforms.uGK = GK; sh.uniforms.uSnapK = SK;
-    sh.vertexShader = "attribute float aFlick;\nattribute float aRow;\nattribute float aSun;\nattribute float aRoom;\nattribute float aAO;\nuniform float uGDim;\nattribute float aNightL;\nuniform float uNightL;\nattribute vec4 aGP;\nattribute vec3 aGN;\nuniform float uFlick;\nuniform float uRow;\nuniform vec3 uSun;\nuniform float uDim;\nuniform float uAO;\nuniform vec2 uSnap;\nuniform float uSnapK;\nvarying vec4 vGP;\nvarying vec3 vGN;\n" +
+    sh.vertexShader = "attribute vec3 aBnc;\nattribute vec4 aBnc2;\nuniform float uHQ;\nattribute float aFlick;\nattribute float aRow;\nattribute float aSun;\nattribute float aRoom;\nattribute float aAO;\nuniform float uGDim;\nattribute float aNightL;\nuniform float uNightL;\nattribute vec4 aGP;\nattribute vec3 aGN;\nuniform float uFlick;\nuniform float uRow;\nuniform vec3 uSun;\nuniform float uDim;\nuniform float uAO;\nuniform vec2 uSnap;\nuniform float uSnapK;\nvarying vec4 vGP;\nvarying vec3 vGN;\n" +
       sh.vertexShader.replace("#include <color_vertex>",
-        "#include <color_vertex>\n#ifdef USE_COLOR\n vColor.rgb *= mix(1.0, uDim, aRoom);\n vColor.rgb += aFlick * uFlick * vec3(0.9, 1.0, 0.94) + aRow * uRow * vec3(1.0, 0.97, 0.9) + aSun * uSun + aNightL * uNightL * vec3(0.9, 1.0, 0.94);\n vColor.rgb *= mix(1.0, aAO > 0.001 ? aAO : 1.0, uAO) * uGDim;\n#endif\n vGP = aGP; vGN = aGN;\n#ifdef USE_LM\n vLM = aLM; vRoomLM = aRoom;\n#endif")
+        "#include <color_vertex>\n#ifdef USE_COLOR\n vColor.rgb *= mix(1.0, uDim, aRoom);\n if (uHQ > 0.5) vColor.rgb += aBnc * mix(1.0, uDim, aRoom) + aBnc2.x * uFlick * vec3(0.9, 1.0, 0.94) + aBnc2.y * uRow * vec3(1.0, 0.97, 0.9) + aBnc2.z * uSun + aBnc2.w * uNightL * vec3(0.9, 1.0, 0.94);\n vColor.rgb += aFlick * uFlick * vec3(0.9, 1.0, 0.94) + aRow * uRow * vec3(1.0, 0.97, 0.9) + aSun * uSun + aNightL * uNightL * vec3(0.9, 1.0, 0.94);\n vColor.rgb *= mix(1.0, aAO > 0.001 ? aAO : 1.0, uAO) * uGDim;\n if (uHQ > 0.5) vColor.rgb *= mix(1.0, aAO > 0.001 ? aAO : 1.0, uAO * 0.7);\n#endif\n vGP = aGP; vGN = aGN;\n#ifdef USE_LM\n vLM = aLM; vRoomLM = aRoom;\n#endif")
       .replace("#include <project_vertex>", "#include <project_vertex>\n if (uSnap.x > 0.0 && uSnapK > 0.5) { gl_Position.xy = floor(gl_Position.xy / gl_Position.w * uSnap + 0.5) / uSnap * gl_Position.w; }");
     sh.fragmentShader = sh.fragmentShader.replace("#define USE_LM\n", "");
-    sh.fragmentShader = (lm ? "#define USE_LM\n" : "") + (gloss > 0 ? "#define USE_GLOSS\n" : "") + LM_FRAG_HEAD + GLOSS_FRAG_HEAD + GRIME_GLSL + sh.fragmentShader.replace("#include <color_fragment>", "#include <color_fragment>\n" + LM_FRAG_BODY + " if (uGrime > 0.0) diffuseColor.rgb = grime(diffuseColor.rgb);\n" + GLOSS_FRAG_BODY);
+    sh.fragmentShader = (lm ? "#define USE_LM\n" : "") + (gloss > 0 ? "#define USE_GLOSS\n" : "") + (det ? "#define USE_DETAIL\n" : "") + LM_FRAG_HEAD + GLOSS_FRAG_HEAD + DETAIL_FRAG_HEAD + GRIME_GLSL + sh.fragmentShader.replace("#include <color_fragment>", "#include <color_fragment>\n" + LM_FRAG_BODY + " if (uGrime > 0.0) diffuseColor.rgb = grime(diffuseColor.rgb);\n" + GLOSS_FRAG_BODY + DETAIL_FRAG_BODY);
   };
   return mat;
 }
@@ -1153,7 +1173,7 @@ function lmPack() {
     }
   }
   let h = 7; for (const c of LM_CHARTS) h = (h * 31 + c.n * 7 + c.m + c.px * 3 + c.py) % 1000000007;
-  LM.sig = `${LM_CHARTS.length}:${LM_W}x${LM.H}:${h}`;
+  LM.sig = `${LM_CHARTS.length}:${LM_W}x${LM.H}:${h}:b${BNC.K}_${BNC.AOP}_${BNC.R}_${BNC.RF}_${BNC.FC}_${BNC.S}_${BNC.B}`;
 }
 function lmEnc(v) { return Math.round(Math.sqrt(Math.min(1, Math.max(0, v / 2))) * 255); }
 function lmTexOpts(t) {
@@ -1162,10 +1182,14 @@ function lmTexOpts(t) {
 }
 function lmBake() {
   const t0 = performance.now(), W = LM_W, H = LM.H;
-  const d = [new Uint8Array(W * H * 4), new Uint8Array(W * H * 4), new Uint8Array(W * H * 4)];
-  for (const a of d) for (let i = 3; i < a.length; i += 4) a[i] = 255;
+  const mk = () => { const a = new Uint8Array(W * H * 4); for (let i = 3; i < a.length; i += 4) a[i] = 255; return a; };
+  const d = [mk(), mk(), mk()];   // ふだん（以前と同じ）
+  const q = [mk(), mk(), mk()];   // 高画質：はね返りの光つき
+  bounceSetup();
+  const tb = new Float32Array(7);
   for (const c of LM_CHARTS) {
     const [ox, oy, oz] = c.o, [ux, uy, uz] = c.du, [vx, vy, vz] = c.dv, [nx, ny, nz] = c.nrm;
+    const BG = bounceGrid(c), da = BNC_DAMB[c.zone] || 0;
     for (let j = 0; j < c.m; j++) for (let i = 0; i < c.n; i++) {
       const fu = (i + 0.5) / c.n, fv = (j + 0.5) / c.m;
       const P = lightPoint(ox + ux * fu + vx * fv, oy + uy * fu + vy * fv, oz + uz * fu + vz * fv, nx, ny, nz, c.zone, true);
@@ -1173,6 +1197,10 @@ function lmBake() {
       d[0][k] = lmEnc(L[0]); d[0][k + 1] = lmEnc(L[1]); d[0][k + 2] = lmEnc(L[2]);
       d[1][k] = lmEnc(L[5]); d[1][k + 1] = lmEnc(L[4]); d[1][k + 2] = lmEnc(L[6]);
       d[2][k] = lmEnc(L[3]); d[2][k + 1] = lmEnc(P.A[0]);
+      if (BG) bounceInterp(BG, c, i, j, tb); else tb.fill(0);
+      q[0][k] = lmEnc(L[0] - da + tb[0]); q[0][k + 1] = lmEnc(L[1] - da + tb[1]); q[0][k + 2] = lmEnc(L[2] - da * 1.08 + tb[2]);
+      q[1][k] = lmEnc(L[5] + tb[5]); q[1][k + 1] = lmEnc(L[4] + tb[4]); q[1][k + 2] = lmEnc(L[6] + tb[6]);
+      q[2][k] = lmEnc(L[3] + tb[3]); q[2][k + 1] = lmEnc(Math.pow(P.A[0], BNC.AOP));   // 高画質では隅の暗がりを少し深く（はね返りの光で明るくなった分、形がぼやけないように）
     }
     // 区画のまわり1画素は、いちばん近い内側の画素の写し（ぼかしたときに隣の区画や黒がにじまないように）
     for (let j = -LM_PAD; j < c.m + LM_PAD; j++) for (let i = -LM_PAD; i < c.n + LM_PAD; i++) {
@@ -1180,29 +1208,267 @@ function lmBake() {
       const si = Math.min(c.n - 1, Math.max(0, i)), sj = Math.min(c.m - 1, Math.max(0, j));
       const k = ((c.py + LM_PAD + j) * W + c.px + LM_PAD + i) * 4, ks = ((c.py + LM_PAD + sj) * W + c.px + LM_PAD + si) * 4;
       for (const a of d) { a[k] = a[ks]; a[k + 1] = a[ks + 1]; a[k + 2] = a[ks + 2]; }
+      for (const a of q) { a[k] = a[ks]; a[k + 1] = a[ks + 1]; a[k + 2] = a[ks + 2]; }
     }
   }
-  LM.data = d; LM.ms = performance.now() - t0; LM.source = "baked";
-  return d.map(a => { const t = new THREE.DataTexture(a, W, H, THREE.RGBAFormat); lmTexOpts(t); t.needsUpdate = true; return t; });
+  LM.data = { base: d, hq: q }; LM.ms = performance.now() - t0; LM.source = "baked";
+  const tex = (arr) => arr.map(a => { const t = new THREE.DataTexture(a, W, H, THREE.RGBAFormat); lmTexOpts(t); t.needsUpdate = true; return t; });
+  return { base: tex(d), hq: tex(q) };
 }
 function lmLoadPrebaked(pb) {
-  return Promise.all([pb.m0, pb.m1, pb.m2].map(src => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; })))
+  const load = (list) => Promise.all(list.map(src => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; })))
     .then(imgs => imgs.map(im => { const t = new THREE.Texture(im); lmTexOpts(t); t.needsUpdate = true; return t; }));
+  return Promise.all([load([pb.m0, pb.m1, pb.m2]), pb.h0 ? load([pb.h0, pb.h1, pb.h2]) : Promise.resolve(null)]).then(([base, hq]) => ({ base, hq }));
+}
+// 光の絵は2組：ふだん（以前と同じ）と高画質（はね返りの光つき）。画質の切り替えは、どちらの絵を使うかを差し替えるだけ（重さは同じ）
+const LM_SETS = { base: null, hq: null };
+function lmUse() {
+  const ts = (HQU.value > 0.5 && LM_SETS.hq) || LM_SETS.base; if (!ts) return;
+  LM_U.t0.value = ts[0]; LM_U.t1.value = ts[1]; LM_U.t2.value = ts[2];
 }
 function lmFinish() {   // buildShell と出口の板を作ったあとに呼ぶ
   lmPack();
-  const use = (ts) => { LM_U.t0.value = ts[0]; LM_U.t1.value = ts[1]; LM_U.t2.value = ts[2]; };
+  const take = (r) => { LM_SETS.base = r.base; LM_SETS.hq = r.hq; lmUse(); };
   const pb = window.__LIGHTMAPS;
-  if (pb && pb.sig === LM.sig) return lmLoadPrebaked(pb).then(ts => { LM.source = "prebaked"; use(ts); }).catch(() => use(lmBake()));
-  use(lmBake());
+  if (pb && pb.sig === LM.sig) return lmLoadPrebaked(pb).then(r => { LM.source = "prebaked"; take(r); prbLoad(pb); }).catch(() => take(lmBake()));
+  take(lmBake());
   return Promise.resolve();
 }
 function lmExport() {   // 1ファイル版を作るときに使う：焼いた絵をPNGにして返す
   if (!LM.data) lmBake();
   const cv = document.createElement("canvas"); cv.width = LM_W; cv.height = LM.H; const ctx = cv.getContext("2d");
   const out = { sig: LM.sig, W: LM_W, H: LM.H };
-  LM.data.forEach((a, i) => { ctx.putImageData(new ImageData(new Uint8ClampedArray(a), LM_W, LM.H), 0, 0); out["m" + i] = cv.toDataURL("image/png"); });
+  for (const [set, pre] of [[LM.data.base, "m"], [LM.data.hq, "h"]])
+    set.forEach((a, i) => { ctx.putImageData(new ImageData(new Uint8ClampedArray(a), LM_W, LM.H), 0, 0); out[pre + i] = cv.toDataURL("image/png"); });
+  // 小物用の光の見本点も入れておく（Quest で起動のたびに計算しないように）。有効な点だけを 0〜1.6 の16ビットで
+  bounceSetup();
+  const ids = []; PRB.ok.forEach((v, i) => { if (v) ids.push(i); });
+  const q = new Uint16Array(ids.length * 42);
+  ids.forEach((id, j) => { for (let c = 0; c < 42; c++) q[j * 42 + c] = Math.round(Math.min(1.6, Math.max(0, PRB.v[id * 42 + c])) / 1.6 * 65535); });
+  const b64 = (u8) => { let t = ""; for (let i = 0; i < u8.length; i += 32768) t += String.fromCharCode.apply(null, u8.subarray(i, i + 32768)); return btoa(t); };
+  out.pok = b64(PRB.ok); out.pv = b64(new Uint8Array(q.buffer));
   return out;
+}
+function prbLoad(pb) {   // 1ファイル版：焼いてある見本点を読む
+  if (!pb.pok || !pb.pv) return;
+  const un = (t) => Uint8Array.from(atob(t), c => c.charCodeAt(0));
+  const ok = un(pb.pok), q = new Uint16Array(un(pb.pv).buffer), v = new Float32Array(ok.length * 42);
+  let j = 0; ok.forEach((o, id) => { if (!o) return; for (let c = 0; c < 42; c++) v[id * 42 + c] = q[j * 42 + c] / 65535 * 1.6; j++; });
+  if (ok.length === PRB.nx * PRB.ny * PRB.nz) { PRB.ok = ok; PRB.v = v; }
+}
+
+// ============================================================================
+//  5c. はね返りの光（高画質）
+//   蛍光灯や窓の光は、床・壁・机の天板に当たって一度はね返り、天井や物の陰をほんのり照らす（木の床なら暖かい色）。
+//   ・床・壁・机の天板の上に「光を返す点」を約0.85m おきに置き、その点に当たる光（直接の光）と面の色から、はね返す光の強さを決める
+//   ・ライトマップの画素（4画素おきに計算して間をなめらかにつなぐ）と、小物（約1m おきの「光の見本点」の6方向から）が、その光を受ける
+//   ・どこも同じだった「薄い明るさ」はそのぶん減らす（隅は暗く、光の当たる開けた所は明るく）
+//   ・後廊下・非常口の写しは、ふだんの光と同じく「前廊下の座標」で計算するので、ワープの継ぎ目でも一致する
+//   ・ゲーム中は計算しない（焼き込むだけ）ので重さは変わらない
+// ============================================================================
+const BNC = { n: 0, nf: 0, R: 4.0, RF: 15, FC: 2.0, K: 0.65, AOP: 1.7, S: 0.85, cell: 1.5, B: 4, ready: false, ms: 0, msProbe: 0, msProps: 0 };
+//  近く（4m まで）は細かい点で、遠く（15m まで）は約2m ごとにまとめた点で数える（教室は天井まで6m・奥行き21m あるので、遠くの分が大きい）
+const BNC_DAMB = { room: 0.07, corr: 0.035, door: 0.035 };   // 高画質で減らす「どこも同じ薄い明るさ」
+const _lin = (h) => { const c = new THREE.Color(h); return [c.r, c.g, c.b]; };   // 画面の色（sRGB）→ 光の計算の色
+const _desat = (c, k = 0.3) => { const l = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; return c.map(v => v + (l - v) * k); };
+const BNC_ALB = {   // 面の色（C きれいな校舎の色に合わせる）
+  "room:floor": _desat(_lin(0xb39065), 0.55), "room:aisle": _lin(0x5d6670), "room:riser": _desat(_lin(0x9a7650), 0.55),
+  "room:wall": _lin(0xe8e5dd), wallLow: _desat(_lin(0xb8956a), 0.55), "corr:floor": _lin(0xc2c0bc), "corr:wall": _lin(0xe6e6e1),
+  "door:floor": _lin(0x9a9c9a), "door:wall": _lin(0x8a8a86), desk: _desat(_lin(0xc49c6c), 0.55)
+};
+// 後廊下・非常口の写しを、ふだんの光と同じ「前廊下（本物）の座標」に写す
+function canonPt(x, y, z, zone) {
+  if ((zone === "corr" || zone === "door") && inExitDummy(x, z)) { x += EXIT_T.x; y += EXIT_T.y; z += EXIT_T.z; }
+  if (zone === "exit") { if (x > CB - HALF) { x -= SHIFT_X; y -= SHIFT_Y; } if (x < 0) { x += EXIT_T.x; y += EXIT_T.y; z += EXIT_T.z; } }
+  if (zone === "corr") { if (x > 0) { x -= SHIFT_X; y -= SHIFT_Y; } }
+  return [Math.round(x * 1000) / 1000, Math.round(y * 1000) / 1000, Math.round(z * 1000) / 1000];
+}
+let VP = null, VPF = null;   // 光を返す点（近く用・遠く用のまとめ）
+function bounceSetup() {
+  if (BNC.ready) return;
+  const t0 = performance.now(), pts = [];
+  const addPt = (x, y, z, nx, ny, nz, zone, alb, area) => {
+    const L = lightAt(x, y, z, nx, ny, nz, zone, false), amb = zone === "room" ? 0.07 : 0.035;
+    const al = 0.2126 * alb[0] + 0.7152 * alb[1] + 0.0722 * alb[2];
+    const f = [Math.max(0, L[0] - amb) * alb[0] * area, Math.max(0, L[1] - amb) * alb[1] * area, Math.max(0, L[2] - amb * 1.08) * alb[2] * area,
+               L[3] * al * area, L[4] * al * area, L[5] * al * area, L[6] * al * area];
+    const lum = f[0] + f[1] + f[2] + f[3] + f[4] + f[5] + f[6];
+    if (lum > 1e-5) pts.push([x, y, z, nx, ny, nz, lum, ...f]);
+  };
+  for (const c of LM_CHARTS) {
+    const key = c.acc.key; if (!key) continue;
+    const kind = key.split(":")[1]; if (kind === "ceil") continue;
+    if (!(c.zone === "room" || c.zone === "corr" || c.zone === "door")) continue;
+    const lu = Math.hypot(...c.du), lv = Math.hypot(...c.dv);
+    const na = Math.max(1, Math.round(lu / BNC.S)), nb = Math.max(1, Math.round(lv / BNC.S)), area = lu * lv / (na * nb);
+    const [nx, ny, nz] = c.nrm;
+    for (let b = 0; b < nb; b++) for (let a = 0; a < na; a++) {
+      const fu = (a + 0.5) / na, fv = (b + 0.5) / nb;
+      const x = c.o[0] + c.du[0] * fu + c.dv[0] * fv, y = c.o[1] + c.du[1] * fu + c.dv[1] * fv, z = c.o[2] + c.du[2] * fu + c.dv[2] * fv;
+      const m = canonPt(x, y, z, c.zone);
+      if (Math.abs(m[0] - x) + Math.abs(m[1] - y) + Math.abs(m[2] - z) > 0.002) continue;   // 写し（後廊下など）は前廊下の点と同じなので置かない
+      const alb = key === "room:wall" && y < 0.9 ? BNC_ALB.wallLow : BNC_ALB[key] || [0.5, 0.5, 0.5];
+      addPt(x + nx * 0.03, y + ny * 0.03, z + nz * 0.03, nx, ny, nz, c.zone, alb, area);
+    }
+  }
+  for (const t of DESK_TOPS) {
+    const n = Math.max(1, Math.round((t.z1 - t.z0) / BNC.S)), area = (t.x1 - t.x0) * (t.z1 - t.z0) / n;
+    for (let k = 0; k < n; k++) addPt((t.x0 + t.x1) / 2, t.y + 0.03, t.z0 + (k + 0.5) * (t.z1 - t.z0) / n, 0, 1, 0, "room", BNC_ALB.desk, area);
+  }
+  VP = packVPL(pts, BNC.cell);
+  // 遠くの分：2m 四方・面の向き（6方向）ごとに、光を返す点をまとめる（位置は、まとめた中で光の重心にいちばん近い点）
+  const cl = new Map();
+  for (const p of pts) {
+    const nc = Math.abs(p[3]) > 0.5 ? (p[3] > 0 ? 0 : 1) : Math.abs(p[4]) > 0.5 ? (p[4] > 0 ? 2 : 3) : (p[5] > 0 ? 4 : 5);
+    const key = Math.floor(p[0] / BNC.FC) + "," + Math.floor(p[1] / BNC.FC) + "," + Math.floor(p[2] / BNC.FC) + "," + nc;
+    let c = cl.get(key); if (!c) cl.set(key, c = { list: [], sx: 0, sy: 0, sz: 0, w: 0 });
+    c.list.push(p); c.sx += p[0] * p[6]; c.sy += p[1] * p[6]; c.sz += p[2] * p[6]; c.w += p[6];
+  }
+  const far = [];
+  for (const c of cl.values()) {
+    const cx = c.sx / c.w, cy = c.sy / c.w, cz = c.sz / c.w;
+    let best = c.list[0], bd = 1e9;
+    for (const p of c.list) { const d = (p[0] - cx) ** 2 + (p[1] - cy) ** 2 + (p[2] - cz) ** 2; if (d < bd) { bd = d; best = p; } }
+    const q = best.slice(0, 7); q[6] = 0; const f = [0, 0, 0, 0, 0, 0, 0];
+    for (const p of c.list) for (let k = 0; k < 7; k++) f[k] += p[7 + k];
+    q[6] = f.reduce((a, b) => a + b, 0); far.push([...q, ...f]);
+  }
+  VPF = packVPL(far, 3.0);
+  BNC.n = pts.length; BNC.nf = far.length; BNC.ready = true; BNC.ms = performance.now() - t0;
+  if (!PRB.v) bounceProbes();
+}
+// 光を返す点を、速く探せるようにマスごとに並べ直す
+function packVPL(pts, cs) {
+  let gx0 = 1e9, gz0 = 1e9, gx1 = -1e9, gz1 = -1e9;
+  for (const p of pts) { gx0 = Math.min(gx0, p[0]); gz0 = Math.min(gz0, p[2]); gx1 = Math.max(gx1, p[0]); gz1 = Math.max(gz1, p[2]); }
+  const gw = Math.floor((gx1 - gx0) / cs) + 1, gh = Math.floor((gz1 - gz0) / cs) + 1;
+  const cellOf = (p) => Math.floor((p[2] - gz0) / cs) * gw + Math.floor((p[0] - gx0) / cs);
+  pts.sort((a, b) => cellOf(a) - cellOf(b));
+  const n = pts.length, D = new Float32Array(n * 14), start = new Int32Array(gw * gh + 1);
+  pts.forEach((p, i) => { D.set(p, i * 14); start[cellOf(p) + 1]++; });
+  for (let i = 0; i < gw * gh; i++) start[i + 1] += start[i];
+  return { D, n, start, gx0, gz0, gw, gh, cs };
+}
+// 遠くの点用の見通し（0.25m 刻み。はね返りの光はぼんやりしているので、粗くてよい）
+function visibleCoarse(ax, ay, az, bx, by, bz) {
+  const dx = bx - ax, dy = by - ay, dz = bz - az, d = Math.hypot(dx, dy, dz);
+  const steps = Math.max(2, Math.ceil(Math.hypot(dx, dz) / 0.25));
+  for (let s = 1; s < steps; s++) {
+    const t = s / steps;
+    if ((1 - t) * d < 0.15) break;
+    const i = Math.floor((ax + dx * t - BX0) / RES), j = Math.floor((az + dz * t - BZ0) / RES);
+    if (i < 0 || j < 0 || i >= BW || j >= BH) return false;
+    const y = ay + dy * t, k = j * BW + i;
+    if (y >= GC[k] - 0.01 || y < GF[k] - 0.005) return false;
+    if (y >= GOL[k] && y <= GOH[k]) return false;
+  }
+  return true;
+}
+// 1点が受ける、はね返りの光（7つの光の種類ごと。lightAt と同じ並び）
+//  近く：細かい点、4m で消える（2.5m から薄く）。遠く：まとめた点、近く側の残り（2.5〜4m で入れ替わる）から 15m まで
+const smooth01 = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+function gatherVPL(V, ox, oy, oz, nx, ny, nz, far, out) {
+  const R = far ? BNC.RF : BNC.R, R2 = R * R, { D, start, gx0, gz0, gw, gh, cs } = V;
+  const i0 = Math.max(0, Math.floor((ox - R - gx0) / cs)), i1 = Math.min(gw - 1, Math.floor((ox + R - gx0) / cs));
+  const j0 = Math.max(0, Math.floor((oz - R - gz0) / cs)), j1 = Math.min(gh - 1, Math.floor((oz + R - gz0) / cs));
+  if (i0 > i1 || j0 > j1) return;
+  for (let j = j0; j <= j1; j++) for (let k = start[j * gw + i0], e = start[j * gw + i1 + 1]; k < e; k++) {
+    const b = k * 14, dx = D[b] - ox, dy = D[b + 1] - oy, dz = D[b + 2] - oz, d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 > R2 || d2 < 1e-4) continue;
+    const d = Math.sqrt(d2);
+    const wd = far ? smooth01(2.5, 4.0, d) * (1 - smooth01(13, BNC.RF, d)) : 1 - smooth01(2.5, 4.0, d);
+    if (wd <= 0) continue;
+    const cp = (dx * nx + dy * ny + dz * nz) / d; if (cp <= 0) continue;
+    const cv = -(dx * D[b + 3] + dy * D[b + 4] + dz * D[b + 5]) / d; if (cv <= 0) continue;
+    const w = wd * cp * cv / (Math.PI * (d2 + 0.35));
+    if (w * D[b + 6] < 2e-5) continue;
+    if (!(far ? visibleCoarse : visible)(D[b], D[b + 1], D[b + 2], ox, oy, oz)) continue;
+    for (let c = 0; c < 7; c++) out[c] += w * D[b + 7 + c];
+  }
+}
+function bounceAt(px, py, pz, nx, ny, nz, out) {
+  out.fill(0);
+  const ox = px + nx * 0.05, oy = py + ny * 0.05, oz = pz + nz * 0.05;
+  gatherVPL(VP, ox, oy, oz, nx, ny, nz, false, out);
+  gatherVPL(VPF, ox, oy, oz, nx, ny, nz, true, out);
+  for (let c = 0; c < 7; c++) out[c] *= BNC.K;
+}
+// ライトマップの区画ごとに、4画素おきの格子で計算する（はね返りの光はなめらかなので、間はつなぐだけでよい）
+function bounceGrid(c) {
+  if (!(c.zone === "room" || c.zone === "corr" || c.zone === "door")) return null;
+  const B = BNC.B, gu = c.n > 1 ? Math.ceil((c.n - 1) / B) : 0, gv = c.m > 1 ? Math.ceil((c.m - 1) / B) : 0;
+  const v = new Float32Array((gu + 1) * (gv + 1) * 7), tmp = new Float32Array(7), [nx, ny, nz] = c.nrm;
+  for (let b = 0; b <= gv; b++) for (let a = 0; a <= gu; a++) {
+    const fu = (0.5 + (gu ? a * (c.n - 1) / gu : 0)) / c.n, fv = (0.5 + (gv ? b * (c.m - 1) / gv : 0)) / c.m;
+    const m = canonPt(c.o[0] + c.du[0] * fu + c.dv[0] * fv, c.o[1] + c.du[1] * fu + c.dv[1] * fv, c.o[2] + c.du[2] * fu + c.dv[2] * fv, c.zone);
+    bounceAt(m[0], m[1], m[2], nx, ny, nz, tmp);
+    v.set(tmp, (b * (gu + 1) + a) * 7);
+  }
+  return { v, gu, gv };
+}
+function bounceInterp(G, c, i, j, out) {
+  const tu = G.gu ? i * G.gu / (c.n - 1) : 0, tv = G.gv ? j * G.gv / (c.m - 1) : 0;
+  const a0 = Math.min(Math.floor(tu), Math.max(0, G.gu - 1)), b0 = Math.min(Math.floor(tv), Math.max(0, G.gv - 1));
+  const a1 = Math.min(G.gu, a0 + 1), b1 = Math.min(G.gv, b0 + 1), fa = tu - a0, fb = tv - b0, W = G.gu + 1, v = G.v;
+  for (let k = 0; k < 7; k++)
+    out[k] = (v[(b0 * W + a0) * 7 + k] * (1 - fa) + v[(b0 * W + a1) * 7 + k] * fa) * (1 - fb) + (v[(b1 * W + a0) * 7 + k] * (1 - fa) + v[(b1 * W + a1) * 7 + k] * fa) * fb;
+}
+// ---- 小物用：約1m おきの「光の見本点」。6方向（±x ±y ±z）から来る、はね返りの光を覚えておく ----
+const PRB = { x0: -48.5, z0: -16.5, y0: 0.4, s: 1.0, nx: 59, ny: 6, nz: 28, v: null, ok: null };
+function bounceProbes() {
+  const t0 = performance.now(), { nx: NX, ny: NY, nz: NZ } = PRB, tmp = new Float32Array(7);
+  PRB.v = new Float32Array(NX * NY * NZ * 42); PRB.ok = new Uint8Array(NX * NY * NZ);
+  const dirs = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+  for (let k = 0; k < NZ; k++) for (let i = 0; i < NX; i++) {
+    const x = PRB.x0 + i * PRB.s, z = PRB.z0 + k * PRB.s, r = rectAtStrict(x, z);
+    if (!r || r.dummy || r.dark || r.zone === "exit") continue;
+    const m = canonPt(x, 0, z, r.zone); if (Math.abs(m[0] - x) + Math.abs(m[2] - z) > 0.002) continue;
+    const fl = floorOf(r, x, z);
+    for (let j = 0; j < NY; j++) {
+      const y = PRB.y0 + j * PRB.s; if (y < fl + 0.05 || y > r.y1 - 0.05) continue;
+      const id = (k * NY + j) * NX + i; PRB.ok[id] = 1;
+      dirs.forEach((dv, di) => { bounceAt(x - dv[0] * 0.05, y - dv[1] * 0.05, z - dv[2] * 0.05, dv[0], dv[1], dv[2], tmp); PRB.v.set(tmp, id * 42 + di * 7); });
+    }
+  }
+  BNC.msProbe = performance.now() - t0;
+}
+const _pw = new Float32Array(7);
+function probeSample(x, y, z, nx, ny, nz, out) {
+  out.fill(0);
+  const fx = (x - PRB.x0) / PRB.s, fy = (y - PRB.y0) / PRB.s, fz = (z - PRB.z0) / PRB.s;
+  const i0 = Math.floor(fx), j0 = Math.floor(fy), k0 = Math.floor(fz);
+  const wx = [nx * nx, ny * ny, nz * nz], di = [nx >= 0 ? 0 : 1, ny >= 0 ? 2 : 3, nz >= 0 ? 4 : 5];
+  let wsum = 0;
+  const take = (i, j, k, w) => {
+    if (i < 0 || j < 0 || k < 0 || i >= PRB.nx || j >= PRB.ny || k >= PRB.nz) return;
+    const id = (k * PRB.ny + j) * PRB.nx + i; if (!PRB.ok[id] || w <= 0) return;
+    for (let a = 0; a < 3; a++) { const o = id * 42 + di[a] * 7, ww = w * wx[a]; for (let c = 0; c < 7; c++) out[c] += PRB.v[o + c] * ww; }
+    wsum += w;
+  };
+  for (let dk = 0; dk < 2; dk++) for (let dj = 0; dj < 2; dj++) for (let dd = 0; dd < 2; dd++)
+    take(i0 + dd, j0 + dj, k0 + dk, (dd ? fx - i0 : 1 - (fx - i0)) * (dj ? fy - j0 : 1 - (fy - j0)) * (dk ? fz - k0 : 1 - (fz - k0)));
+  if (wsum < 1e-3) {   // まわりに見本点がない（壁ぎわ・床ぎわ）：近くの見本点を探す
+    for (let r = 1; r <= 2 && wsum < 1e-3; r++) for (let dk = -r; dk <= r; dk++) for (let dj = -r; dj <= r; dj++) for (let dd = -r; dd <= r; dd++) take(Math.round(fx) + dd, Math.round(fy) + dj, Math.round(fz) + dk, 1);
+  }
+  if (wsum > 0) for (let c = 0; c < 7; c++) out[c] /= wsum;
+}
+// 小物（頂点に光を焼いた物）すべてに、はね返りの光を持たせる（高画質のときだけシェーダーが足す）
+function bounceProps() {
+  const t0 = performance.now(), seen = new Set(), tmp = new Float32Array(7);
+  scene.traverse((o) => {
+    if (!(o.isMesh || o.isInstancedMesh) || !o.material || !o.material.userData || !o.material.userData.grimeK) return;
+    const g = o.geometry; if (!g || seen.has(g) || g.attributes.aBnc) return; seen.add(g);
+    const n = g.attributes.position.count, b1 = new Float32Array(n * 3), b2 = new Float32Array(n * 4);
+    const gp = g.attributes.aGP, gn = g.attributes.aGN, rm = g.attributes.aRoom;
+    if (gp && gn) for (let k = 0; k < n; k++) {
+      probeSample(gp.getX(k), gp.getY(k), gp.getZ(k), gn.getX(k), gn.getY(k), gn.getZ(k), tmp);
+      const da = rm && rm.getX(k) > 0.5 ? BNC_DAMB.room : BNC_DAMB.corr;
+      b1[k * 3] = tmp[0] - da; b1[k * 3 + 1] = tmp[1] - da; b1[k * 3 + 2] = tmp[2] - da * 1.08;
+      b2[k * 4] = tmp[3]; b2[k * 4 + 1] = tmp[4]; b2[k * 4 + 2] = tmp[5]; b2[k * 4 + 3] = tmp[6];
+    }
+    g.setAttribute("aBnc", new THREE.BufferAttribute(b1, 3)); g.setAttribute("aBnc2", new THREE.BufferAttribute(b2, 4));
+  });
+  BNC.msProps = performance.now() - t0;
 }
 
 const FLOOR_GLOSS = { "corr:floor": 0.32, "room:floor": 0.14, "exit:floor": 0.12, "door:floor": 0.12 };
@@ -1258,7 +1524,7 @@ function buildRoomFloor(acc) {
 
 function buildShell() {
   const accs = {};
-  const acc = (key) => (accs[key] ||= new Acc(SHELL_MATS[key], key.split(":")[0]));
+  const acc = (key) => (accs[key] ||= Object.assign(new Acc(SHELL_MATS[key], key.split(":")[0]), { key }));   // key は、はね返りの光で面の色を調べるのに使う
   const ni = XS.length - 1, nj = ZS.length - 1;
   for (let i = 0; i < ni; i++) for (let j = 0; j < nj; j++) {
     const r = cellRect(i, j); if (!r) continue;
@@ -1314,6 +1580,38 @@ const PROP_COLORS_CLEAN = {
 const SHELL_COLORS_CLEAN = { "room:riser": 0x9a7650, "door:floor": 0x9a9c9a, "door:wall": 0x8a8a86, "door:ceil": 0xb0b0aa };
 const PROP_MATS = {};
 for (const k in PROP_COLORS) PROP_MATS[k] = patch(new THREE.MeshBasicMaterial({ vertexColors: true, color: PROP_COLORS[k] }));
+// ---- 高画質の質感：机・教卓・腰板の木目、長椅子の布目（模様は明るさ 0.5 を中心に、平均の明るさは変えない） ----
+function detailTex(w, h, draw) {
+  const t = canvasTex(w, h, draw); t.colorSpace = THREE.NoColorSpace; t.anisotropy = 4; return t;
+}
+const woodGrainTex = detailTex(512, 256, (ctx, w, h) => {
+  const rnd = rng(4242), img = ctx.createImageData(w, h), D = img.data;
+  // 木目：横に流れる筋。筋の位置はゆっくり波打ち、ところどころに濃い筋と小さな節
+  const rows = new Float32Array(h);
+  for (let y = 0; y < h; y++) rows[y] = Math.sin(y * 0.21 + Math.sin(y * 0.031) * 3.0) * 0.5 + Math.sin(y * 0.83 + 1.3) * 0.25 + (rnd() - 0.5) * 0.35;
+  const knots = Array.from({ length: 3 }, () => [rnd() * w, rnd() * h, 6 + rnd() * 10]);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const wave = Math.sin(x * 0.012 + y * 0.02) * 2.2 + Math.sin(x * 0.047) * 0.8;
+    const yy = Math.min(h - 1, Math.max(0, Math.round(y + wave)));
+    let v = 0.5 + rows[yy] * 0.24 + (rnd() - 0.5) * 0.06;
+    for (const [kx, ky, kr] of knots) { const dx = (x - kx) / (kr * 2.2), dy = (y - ky) / kr, d = dx * dx + dy * dy; if (d < 1) v -= (1 - d) * 0.22; }
+    const g = Math.round(Math.min(1, Math.max(0, v)) * 255), i = (y * w + x) * 4;
+    D[i] = D[i + 1] = D[i + 2] = g; D[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+});
+const fabricTex = detailTex(256, 256, (ctx, w, h) => {
+  const rnd = rng(777), img = ctx.createImageData(w, h), D = img.data;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const weave = ((x >> 1) + (y >> 1)) % 2 ? 0.04 : -0.04;
+    const g = Math.round(Math.min(1, Math.max(0, 0.5 + weave + (rnd() - 0.5) * 0.18)) * 255), i = (y * w + x) * 4;
+    D[i] = D[i + 1] = D[i + 2] = g; D[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+});
+for (const [k, tex, su, sv, kk] of [["wood", woodGrainTex, 1 / 1.6, 1 / 0.45, 0.9], ["woodDark", woodGrainTex, 1 / 1.6, 1 / 0.45, 0.8], ["lectern", woodGrainTex, 1 / 1.2, 1 / 0.45, 0.8],
+                                     ["panel", woodGrainTex, 1 / 1.6, 1 / 0.6, 0.7], ["seat", fabricTex, 1 / 0.35, 1 / 0.35, 0.7]])
+  PROP_MATS[k].userData.detail = { tex, su, sv, k: kk };
 const STATIC = {};
 function prop(geo, matrix, key, zone) {
   const g = geo.index ? geo.toNonIndexed() : geo.clone();
@@ -1358,6 +1656,7 @@ function deskParts(L) {
   ];
 }
 const DESK_ANOMALY = { tier: 3, block: 1 };
+const DESK_TOPS = [];
 let anomalyDesk = null, anomalyDeskY = 0, stackedDesk = null;
 const SEATS_DESK = [];
 for (let t = 0; t < NT - 1; t++) for (const [za, zb] of BLOCKS) for (let z = za + 0.45; z < zb - 0.3; z += 0.75) SEATS_DESK.push([TIER_X0 + t * D + 0.5 - 0.08, (t + 1) * R + 0.74, z]);
@@ -1385,6 +1684,7 @@ for (let t = 0; t < NT - 1; t++) {
       for (const [g, p, key] of parts) prop(g, M(dx + p[0], y + p[1], zc + p[2]), key, "room");
     }
     OBST.push({ x0: dx - 0.28, x1: dx + 0.76, z0: za + 0.02, z1: zb - 0.02, desk: t === DESK_ANOMALY.tier && bi === DESK_ANOMALY.block });
+    DESK_TOPS.push({ x0: dx - 0.25, x1: dx + 0.25, z0: za + 0.05, z1: zb - 0.05, y: y + 0.74 });   // はね返りの光：机の天板も光を返す
     // 影を落とす部分：天板（＋前の幕板）・ベンチの座面・背もたれ
     const zA = za + 0.05, zB = zb - 0.05;
     addOccluder(dx - 0.25, dx + 0.25, zA, zB, y + 0.70, y + 0.74);
@@ -2738,6 +3038,56 @@ function layoutBlinds() {
   }
 }
 layoutBlinds();
+// ---- 窓から差し込む光の筋（高画質・PCのみ。Quest は描く量が増えて重くなるので出さない） ----
+//  窓の形の柱を、日の差す向きに部屋の奥へ伸ばし、光の色（時間帯の外光 SUN）で薄く足し合わせる。
+//  上の半分はブラインドの羽根のすきまを通るので縞になる。夜・深夜は外光が弱いので、ほぼ見えない
+const SHAFT_DIR = { "朝": [0.35, -0.5, 1], "昼": [0.12, -1.05, 1], "夕方": [-0.55, -0.32, 1], "夜": [0, -0.6, 1], "深夜": [0, -0.6, 1] };
+const shaftMat = new THREE.ShaderMaterial({
+  uniforms: { uCol: { value: new THREE.Vector3() }, uBlind: { value: BLIND_NORMAL }, uTime: WIN_TIME },
+  vertexShader: `attribute vec3 aS; varying vec3 vS; varying vec3 vW; void main() { vS = aS; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+  fragmentShader: `
+    uniform vec3 uCol; uniform float uBlind; uniform float uTime; varying vec3 vS; varying vec3 vW;   // vS：x＝窓の横（0〜1）、y＝窓の縦（0〜1、上が1）、z＝窓からの距離（0〜1）
+    void main() {
+      // 柱の向こう側の面だけを描くので、面を斜めから見ているところ（柱のふち）ほど薄くして、ふちをぼかす
+      vec3 n = normalize(cross(dFdx(vW), dFdy(vW))), v = normalize(cameraPosition - vW);
+      float edge = smoothstep(0.05, 0.6, abs(dot(n, v)));
+      float fade = pow(1.0 - clamp(vS.z, 0.0, 1.0), 1.6) * smoothstep(0.0, 0.06, vS.z);
+      float blind = vS.y > 1.0 - uBlind ? 0.25 + 0.45 * smoothstep(0.35, 0.65, fract(vS.y * 30.0 * uBlind / 0.45)) : 1.0;   // ブラインドの羽根の縞
+      float flick = 0.92 + 0.08 * sin(uTime * 0.7 + vS.x * 6.0);   // ゆっくり揺らぐ（空気中のほこり）
+      gl_FragColor = vec4(uCol * edge * fade * blind * flick, 1.0);
+    }`,
+  transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide, fog: false, extensions: { derivatives: true }
+});
+const shaftGroup = new THREE.Group(); shaftGroup.visible = false; scene.add(shaftGroup);
+const SHAFTS = [];
+for (const x of WINDOW_X) {
+  const y = roomFloorAt(x, ROOM.z0 + 3) + 2.0, z = ROOM.z0 + 0.03;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(8 * 3), 3));
+  geo.setAttribute("aS", new THREE.BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1]), 3));
+  geo.setIndex([0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 0, 4, 5, 0, 5, 1, 1, 5, 6, 1, 6, 2, 2, 6, 7, 2, 7, 3, 3, 7, 4, 3, 4, 0]);
+  const m = new THREE.Mesh(geo, shaftMat); m.frustumCulled = false; shaftGroup.add(m);
+  SHAFTS.push({ x, y, z, geo, band: "" });
+}
+function layoutShafts(band) {
+  const d = SHAFT_DIR[band] || SHAFT_DIR["朝"], L = 9.5, len = Math.hypot(...d), w = PANE_W / 2 - 0.05, h = PANE_H / 2 - 0.05;
+  for (const sh of SHAFTS) {
+    if (sh.band === band) continue; sh.band = band;
+    const P = sh.geo.attributes.position.array, c = [[-w, -h], [w, -h], [w, h], [-w, h]];
+    c.forEach(([dx, dy], i) => {
+      P.set([sh.x + dx, sh.y + dy, sh.z], i * 3);
+      P.set([sh.x + dx + d[0] / len * L, sh.y + dy + d[1] / len * L, sh.z + d[2] / len * L], (i + 4) * 3);
+    });
+    sh.geo.attributes.position.needsUpdate = true;
+  }
+}
+function updateShafts() {
+  const band = skyBand, on = HQU.value > 0.5 && !renderer.xr.isPresenting && !blindsSlammed && state.anomaly !== "blackout";
+  const k = { "朝": 0.5, "昼": 0.24, "夕方": 0.7, "夜": 0.3, "深夜": 0 }[band] ?? 0;
+  shaftMat.uniforms.uCol.value.copy(SUN.value).multiplyScalar(k);
+  shaftGroup.visible = on && k > 0 && SUN.value.x + SUN.value.y + SUN.value.z > 0.05;
+  if (shaftGroup.visible) layoutShafts(band);
+}
 function updateBlinds(dt) {
   if (state.anomaly === "blinds_slam" && !blindsSlammed && state.mode === "play") {
     const h = headPos();
@@ -4284,6 +4634,7 @@ function vrMenuItems() {
     ["ルールと操作を見る", () => { closeVrMenu(); openGuide(false); }],
     ["1限目からやり直す", () => { closeVrMenu(); resetRun(); startIntro(); }],
     [`重さの表示：${PERF.on ? "オン" : "オフ"}`, () => { setPerf(!PERF.on); drawVrMenu(); }],
+    [`画質：${HQ.on ? "高画質" : "以前の見た目"}`, () => { setHQ(!HQ.on); drawVrMenu(); }],
     ["VRを終了する", () => { closeVrMenu(); renderer.xr.getSession()?.end(); }]
   ];
 }
@@ -4719,10 +5070,10 @@ const POST = (() => {
   const comp = M({
     tScene: { value: null }, tBloom: { value: null }, uRes: { value: new THREE.Vector2() }, uLow: { value: new THREE.Vector2() },
     uTime: { value: 0 }, uMode: { value: 1 }, uNight: { value: 0 }, uBright: { value: 1 },
-    uFx: { value: new THREE.Vector4(1, 1, 1, 1) }, uTint: { value: new THREE.Vector3(0.97, 1.02, 0.97) }
+    uFx: { value: new THREE.Vector4(1, 1, 1, 1) }, uTint: { value: new THREE.Vector3(0.97, 1.02, 0.97) }, uHQf: { value: 0 }
   }, `
     uniform sampler2D tScene; uniform sampler2D tBloom; uniform vec2 uRes; uniform vec2 uLow;
-    uniform float uTime; uniform float uMode; uniform float uNight; uniform float uBright; uniform vec4 uFx; uniform vec3 uTint;
+    uniform float uTime; uniform float uMode; uniform float uNight; uniform float uBright; uniform vec4 uFx; uniform vec3 uTint; uniform float uHQf;
     varying vec2 vUv;
     float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
     float bayer2(vec2 a) { a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
@@ -4751,6 +5102,11 @@ const POST = (() => {
         col = pow(max(col, 0.0), vec3(1.0 + 0.22 * uNight * uFx.w)) * (1.0 + 0.08 * uNight * uFx.w);
         col *= mix(1.0, smoothstep(0.95, 0.15, r2 * (1.6 + 1.2 * uNight)), (0.75 + 0.2 * uNight) * uFx.z);
       }
+      if (uHQf > 0.5 && uMode < 1.5) {
+        // 高画質：写真のような明るさの出し方（暗い所はより暗く締まり、中間は少し明るく、まぶしい所は白く飛ばずになめらかに）
+        vec3 a = max(col, 0.0) * 0.85;
+        col = mix(col, clamp((a * (2.51 * a + 0.03)) / (a * (2.43 * a + 0.59) + 0.14), 0.0, 1.0), 0.75);
+      }
       vec3 s = toSRGB(col);
       if (uMode > 0.5 && uMode < 1.5) {
         float g = hash(uv * uRes + fract(uTime * 7.31) * 517.0) - 0.5;
@@ -4772,7 +5128,7 @@ const POST = (() => {
     renderer.getDrawingBufferSize(size);
     const W = Math.max(2, size.x), H = Math.max(2, size.y);
     comp.uniforms.uRes.value.set(W, H);
-    comp.uniforms.uTime.value = GFX.time; comp.uniforms.uMode.value = mode; comp.uniforms.uNight.value = night; comp.uniforms.uBright.value = GFX.bright;
+    comp.uniforms.uHQf.value = HQU.value; comp.uniforms.uTime.value = GFX.time; comp.uniforms.uMode.value = mode; comp.uniforms.uNight.value = night; comp.uniforms.uBright.value = GFX.bright;
     if (mode === 2) {
       const lh = 240, lw = Math.round(lh * W / H);
       if (rtLow.width !== lw || rtLow.height !== lh) rtLow.setSize(lw, lh);
@@ -4837,6 +5193,24 @@ addEventListener("keydown", (e) => {
   flashAnswer("画面の雰囲気：" + GFX_NAMES[GFX.style]);
 });
 applyGfx();
+
+// ---- 高画質（はね返りの光・質感）の切り替え。端末ごとに覚える（展示側の設定）。外すと以前とまったく同じ見た目に戻る ----
+const HQ_KEY = "final-lecture-hq-v1";
+const HQ = { on: true };
+try { const v = localStorage.getItem(HQ_KEY); if (v === "0" || v === "1") HQ.on = v === "1"; } catch (e) { /* 既定は高画質 */ }
+const HQ_HOOKS = [];   // 高画質の切り替えで、ほかに変える物（質感など）
+function applyHQ() {
+  HQU.value = HQ.on ? 1 : 0;
+  lmUse();
+  for (const f of HQ_HOOKS) f(HQ.on);
+  for (const id of ["chk-hq", "chk-hq2"]) { const el = $(id); if (el) el.checked = HQ.on; }
+}
+function setHQ(on) {
+  HQ.on = !!on;
+  try { localStorage.setItem(HQ_KEY, HQ.on ? "1" : "0"); } catch (e) { /* 今回だけ */ }
+  applyHQ();
+}
+for (const id of ["chk-hq", "chk-hq2"]) $(id).addEventListener("change", (e) => setHQ(e.target.checked));
 
 const camWorld = new THREE.Vector3();
 // 床のつや用の蛍光灯の一覧。非常口の奥の写し（後ろ扉前の廊下）にも、同じ並びの「映るだけの蛍光灯」を置く（入れ替わりの前後で映り込みが一致する）
@@ -4929,6 +5303,7 @@ function updateZoneCull() {
   }
 }
 function renderFrame() {
+  updateShafts();
   updateZoneCull();
   updateGloss();
   const xr = renderer.xr.isPresenting, st = GFX.style;
@@ -5046,7 +5421,7 @@ window.__fl = {
   CLIMAX, DOORS, EXIT, EXIT_T, EXF, K: { CF, CB, XF, XB, LEG_Z0, LEG_Z1, ROOM, SPAWN, SHIFT_X }, openExit, nearExit, DUST_OFF, exitPatch, exitHoleInView,
   goView(id, lecture) { state.final = false; state.lecture = lecture; state.anomaly = id; state.judged = false; applyAnomaly(); debugGoAnomaly(); },
   gfx(style, t) { GFX.style = style; applyGfx(); if (t !== undefined) { GFX.frozen = true; GFX.time = t; } },
-  GFX, ZONE_CULL, updateZoneCull, xrTargetFps
+  GFX, ZONE_CULL, updateZoneCull, xrTargetFps, HQ, setHQ, applyHQ, BNC, LM_SETS, bounceAt, lightAt, shaftGroup, shaftMat, SHAFTS
 };
 
 // ============================================================================
@@ -5056,6 +5431,8 @@ async function boot() {
   try { await Promise.race([Promise.all([document.fonts.load('400 40px "Yomogi"'), document.fonts.load('700 20px "Zen Kaku Gothic New"')]), new Promise(r => setTimeout(r, 2500))]); } catch (e) { /* フォールバック書体で描画 */ }
   for (const t of ALL_TEX) t.userData.draw();
   try { await LM_READY; } catch (e) { /* 光の絵の読み込みに失敗しても進める */ }
+  if (!PRB.v) bounceSetup();
+  bounceProps(); applyHQ();   // はね返りの光（1ファイル版では光の絵は焼いてあり、ここでは小物の分だけ計算する）
   classifyZones();   // 教室の物・廊下の物を振り分ける（壁の向こうを描かないため）。すべての物を作り終えてから
   resetRun();
   pumpTex(true);
