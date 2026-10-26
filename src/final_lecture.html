@@ -132,6 +132,8 @@ button:focus-visible { outline: 2px solid var(--blood); outline-offset: 2px; }
 .sheet button { border-color: var(--panel-edge); color: var(--ink); background: #18201d; width: 100%; }
 .sheet button.primary { background: var(--accent); color: #101413; border-color: var(--accent); }
 details.staff { margin: 14px 0 4px; font-size: 13px; color: var(--muted); }
+.festlen { font-size: 13px; margin: -8px 0 16px 26px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.festlen label { cursor: pointer; }
 details.staff > summary { cursor: pointer; padding: 4px 2px; opacity: .8; }
 details.staff[open] > summary { margin-bottom: 10px; }
 fieldset.comfort { border: 1px solid rgba(255,255,255,.14); border-radius: 8px; padding: 4px 12px 6px; margin: 4px 0 14px; }
@@ -318,10 +320,10 @@ fieldset.comfort legend { font-size: 13px; color: var(--muted); padding: 0 6px; 
         <dt>単位</dt><dd id="syl-goal">8回連続で正しく行動すること</dd>
       </dl>
       <ul class="rules">
-        <li><b>おかしな所（異変）がなければ「進む」、あれば「引き返す」。</b>扉の上の案内板に従ってください。</li>
-        <li>進む＝<b>前扉</b>から出て廊下を進む。引き返す＝教室では<b>後ろ扉</b>から、廊下では<b>非常口</b>から戻る。</li>
-        <li>1限目に異変はありません。大講義室と廊下をよく見て覚えてください。何コマ進んだかは、黒板の横の時間割でわかります。</li>
-        <li>限が進むと窓の外の時刻も進みます。空・時計・明るさの変化は異変ではありません。</li>
+        <li id="syl-r1"><b>おかしな所（異変）がなければ「進む」、あれば「引き返す」。</b>扉の上の案内板に従ってください。</li>
+        <li id="syl-r2">進む＝<b>前扉</b>から出て廊下を進む。引き返す＝教室では<b>後ろ扉</b>から、廊下では<b>非常口</b>から戻る。</li>
+        <li id="syl-r3">1限目に異変はありません。大講義室と廊下をよく見て覚えてください。何コマ進んだかは、黒板の横の時間割でわかります。</li>
+        <li id="syl-r4">限が進むと窓の外の時刻も進みます。空・時計・明るさの変化は異変ではありません。</li>
         <li id="syl-penalty">判断を誤ると、1限目（朝）からやり直しになります。</li>
       </ul>
       <fieldset class="diff">
@@ -342,7 +344,11 @@ fieldset.comfort legend { font-size: 13px; color: var(--muted); padding: 0 6px; 
         <div class="gfx">
           <label class="bright">画面の明るさ <input type="range" id="gfx-bright" min="0.6" max="1.6" step="0.05" value="1"> <small>暗い部屋では少し上げてください</small></label>
         </div>
-        <label class="fest"><input type="checkbox" id="chk-fest"><span>学祭モード <small>5限でクリア（約5分）。朝から深夜までを5コマで駆け抜けます</small></span></label>
+        <label class="fest"><input type="checkbox" id="chk-fest"><span>学祭モード <small>朝から深夜までを短く駆け抜けます。異変は見ればわかるものだけ。間違えても同じコマをやり直すだけ</small></span></label>
+        <div class="festlen">学祭モードの長さ：
+          <label><input type="radio" name="festlen" value="5" checked> 5コマ（約5分）</label>
+          <label><input type="radio" name="festlen" value="3"> 3コマ・短め（約3〜4分。こども向けのことば）</label>
+        </div>
         <label class="fest"><input type="checkbox" id="chk-hq" checked><span>高画質 <small>光の回り込み・くっきりした影・細かい模様。重い・見にくいと感じたら外すと以前の見た目に戻ります</small></span></label>
         <label class="fest"><input type="checkbox" id="chk-help"><span>お助け掲示板 <small>判断を誤ると、教室の後ろの掲示板に見逃した異変が貼られます</small></span></label>
         <div class="actions"><button id="btn-records" type="button">プレイ記録</button></div>
@@ -738,6 +744,8 @@ const HQL = { value: 0 };      // 高画質の「光」（はね返り・深い�
 const NIGHTL = { value: 1 };   // 以前は夜の節電で消えた廊下の灯り（10/25 夜から節電はなし。いつも 1=点灯。停電の補講では 0）
 // 廊下・扉の外の明るさ（夜は灯りを全部点けたまま、そろえて少し暗くする。消えた蛍光灯を作らないので異変と間違えない）
 const CDIM = { value: 1 };
+// 学祭モードの短めコース（3コマ）では、黒板・案内板・掲示・ルールの紙を「こども向けのやさしいことば」にする（applyKidsText が切り替える）
+const KID = { on: false };
 const CDIM_BY_BAND = { "朝": 1, "昼": 1, "夕方": 1, "夜": 0.62, "深夜": 0.55 };
 const DIM = { value: 1 };   // 教室だけ夜ほど少し暗くする（廊下は時間で変えない）
 const GRIME = { value: 0 }, AOU = { value: 0 }, SNAP = { value: new THREE.Vector2(0, 0) };
@@ -1867,10 +1875,12 @@ prop(new THREE.CylinderGeometry(0.006, 0.006, 0.14, 6), M(deskX(3) + 0.08, deskT
 prop(box(0.09, 0.46, 0.52), M(deskX(2) + 0.74, 3 * R + 0.6, -4.1), "seat", "room");
 // 異変「全員分の忘れ物」：すべての席の机に、同じペットボトルが一本ずつ
 const bottlesAll = (() => {
-  const geo = BOTTLE_GEO.clone(); bake(geo, "room", M(0, 1.5, -8));
-  const im = new THREE.InstancedMesh(geo, bottleMat, SEATS_DESK.length);
-  SEATS_DESK.forEach(([x, y, z], i) => im.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x, y, z)));
-  im.visible = false; scene.add(im); return im;
+  // 以前は1本を何十回も描く「インスタンス」だったが、頂点の情報（光・はね返り）が多くなり、
+  // 1つのシェーダーで使える数（16）を超えて描けなくなっていた。席ごとに光を焼いて1つの形にまとめる（描画命令は1回のまま）
+  const base = BOTTLE_GEO.index ? BOTTLE_GEO.toNonIndexed() : BOTTLE_GEO;
+  const geos = SEATS_DESK.map(([x, y, z]) => { const g = base.clone(); g.translate(x, y, z); bake(g, "room"); return g; });
+  const m = new THREE.Mesh(mergeGeos(geos), bottleMat);
+  m.visible = false; scene.add(m); return m;
 })();
 
 // ---- 教壇：教卓・黒板 ----
@@ -1953,7 +1963,7 @@ function drawBoard() {
   ctx.font = chalkFont(P.label.length > 4 ? 112 : 170); ctx.fillText(P.label, 100, 280);
   ctx.font = chalkFont(46); ctx.fillText(P.time + " 〜", 112, 370);
   if (state.retake && !state.epilogue && !blood) {   // 判断を誤った直後：やり直しになったことをはっきり見せる（何を見逃したかは言わない）
-    ctx.save(); ctx.font = chalkFont(52); ctx.fillText("再受講", 118, 438); ctx.lineWidth = 4; ctx.strokeRect(104, 392, 186, 60); ctx.restore();
+    ctx.save(); ctx.font = chalkFont(52); ctx.fillText(KID.on ? "もういちど" : "再受講", 118, 438); ctx.lineWidth = 4; ctx.strokeRect(104, 392, KID.on ? 290 : 186, 60); ctx.restore();
   }
   if (blood) {
     const words = ["不可", "不可", "留年", "D", "不合格", "単位取得失敗", "不可", "再履修", "D", "留年"];
@@ -2009,8 +2019,8 @@ function drawBoard() {
   for (const [px, py] of [[1660, 280], [1790, 320], [1700, 340]]) { ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.fill(); }
   ctx.beginPath(); ctx.moveTo(1880, 300); ctx.lineTo(1866, 286); ctx.moveTo(1880, 300); ctx.lineTo(1894, 286); ctx.stroke();
   ctx.font = chalkFont(34);
-  if (state.lecture === 1 && !state.epilogue) ctx.fillText("※ 本日は通常どおり。教室と廊下をよく見ておくこと", 820, 440);   // 1限目は下見（異変は出ない）
-  else ctx.fillText("※ 異変に気づいたら引き返すこと", 820, 440);
+  if (state.lecture === 1 && !state.epilogue) ctx.fillText(KID.on ? "※ きょうは ふつうの日。教室と ろうかを よく見ておこう" : "※ 本日は通常どおり。教室と廊下をよく見ておくこと", 820, 440);   // 1限目は下見（異変は出ない）
+  else ctx.fillText(KID.on ? "※ へんなところが あったら もどろう" : "※ 異変に気づいたら引き返すこと", 820, 440);
 }
 // ---- 時間割（前の壁、黒板の右・前扉の近く）：今日のコマと開始時刻。正しく進んだコマに判が押され、誤ると全部消える ----
 //  本家の「出口の番号」の代わり。あと何コマで終わるかがわかる。異変の材料にはしない（いつも正しい）
@@ -2040,8 +2050,9 @@ function drawTimetable() {
     ctx.fillStyle = "rgba(0,0,0,.18)"; ctx.fillRect(20, y + rh - 1, w - 40, 2);
   }
   ctx.fillStyle = "#333"; ctx.textAlign = "center"; ctx.font = `500 21px ${G}`;
-  ctx.fillText(`全${n}コマ続けて出席で修了。`, w / 2, h - 50);
-  ctx.fillText("判断を誤ると、判はすべて消えます。", w / 2, h - 22);
+  if (KID.on) { ctx.fillText(`${n}こ ぜんぶに はんこが そろえば クリア！`, w / 2, h - 50); ctx.fillText("まちがえたら、おなじ コマを もういちど。", w / 2, h - 22); }
+  else if (FEST) { ctx.fillText(`全${n}コマに出席で修了。`, w / 2, h - 50); ctx.fillText("判断を誤ると、同じコマをもう一度受けます。", w / 2, h - 22); }
+  else { ctx.fillText(`全${n}コマ続けて出席で修了。`, w / 2, h - 50); ctx.fillText("判断を誤ると、判はすべて消えます。", w / 2, h - 22); }
 }
 bakedMesh(new THREE.PlaneGeometry(1.05, 1.4, 2, 2), patch(new THREE.MeshBasicMaterial({ vertexColors: true, map: ttTex }), 0.12), M(ROOM.x0 + 0.012, 2.0, -1.8, Math.PI / 2), "room");
 
@@ -2861,31 +2872,36 @@ function drawCorrNotice(ctx, w, h) {
   ctx.fillStyle = "#f4f2ec"; ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = "#24324a"; ctx.fillRect(0, 0, w, 64);
   ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.font = '700 30px "Zen Kaku Gothic New", sans-serif'; ctx.fillText("受講者の方へ", w / 2, 33);
+  ctx.font = '700 30px "Zen Kaku Gothic New", sans-serif'; ctx.fillText(KID.on ? "みんなへ" : "受講者の方へ", w / 2, 33);
   ctx.fillStyle = "#222"; ctx.font = '700 22px "Zen Kaku Gothic New", sans-serif'; ctx.textAlign = "left";
-  ["廊下で異変に", "気づいたら、", "非常口から", "引き返すこと。"].forEach((t, i) => ctx.fillText(t, 26, 110 + i * 34));
+  (KID.on ? ["ろうかで へんな", "ところを 見つけたら、", "ひじょうぐちから", "もどろう。"] : ["廊下で異変に", "気づいたら、", "非常口から", "引き返すこと。"]).forEach((t, i) => ctx.fillText(t, 26, 110 + i * 34));
   ctx.font = '500 19px "Zen Kaku Gothic New", sans-serif'; ctx.fillStyle = "#333";
-  ["異変がなければ、", "そのまま進むこと。"].forEach((t, i) => ctx.fillText(t, 26, 270 + i * 28));
+  (KID.on ? ["なにもなければ、", "そのまま すすもう。"] : ["異変がなければ、", "そのまま進むこと。"]).forEach((t, i) => ctx.fillText(t, 26, 270 + i * 28));
   ctx.font = '400 16px "Zen Kaku Gothic New", sans-serif'; ctx.fillStyle = "#444"; ctx.textAlign = "right"; ctx.fillText("教務課", w - 24, h - 34);
 }
 const savingTex = canvasTex(300, 424, drawCorrNotice, { clampS: true, clampT: true });
 const savingMat = patch(new THREE.MeshBasicMaterial({ vertexColors: true, map: savingTex }), 0.15);
 for (const [x, y] of [[XF, 0], [XB, TOP]]) bakedMesh(new THREE.PlaneGeometry(0.3, 0.42, 1, 1), savingMat, M(x + 1.3, y + 1.5, WALL_T + 0.012), "corr");
 // 前扉から出て横通路を歩くと正面に見える壁にも、大きめの同じ掲示（前廊下の非常口の使い方）
-{ const nt = canvasTex(600, 848, (ctx, w, h) => { ctx.save(); ctx.scale(2, 2); drawCorrNotice(ctx, w / 2, h / 2); ctx.restore(); }, { clampS: true, clampT: true });
+let corrNoticeBig = null;
+{ const nt = corrNoticeBig = canvasTex(600, 848, (ctx, w, h) => { ctx.save(); ctx.scale(2, 2); drawCorrNotice(ctx, w / 2, h / 2); ctx.restore(); }, { clampS: true, clampT: true });
   bakedMesh(new THREE.PlaneGeometry(0.6, 0.85, 1, 1), patch(new THREE.MeshBasicMaterial({ vertexColors: true, map: nt }), 0.15), M(XF - JOG - CW / 2 + 0.012, 1.5, (ZM0 + ZM1) / 2 - 0.6, Math.PI / 2), "corr"); }
 // ---- 教室の扉の上の案内板：前扉「進む」、後ろ扉「引き返す」（ルールを1文で：異変がなければ進む、あれば引き返す） ----
-function doorPlate(big, small, col) {
-  return canvasTex(512, 168, (ctx, w, h) => {
+const DOOR_PLATES = [];
+function doorPlate(bigN, smallN, col, kidBig, kidSmall) {
+  const t = canvasTex(512, 168, (ctx, w, h) => {
+    const big = KID.on ? kidBig : bigN, small = KID.on ? kidSmall : smallN;
     ctx.fillStyle = col; ctx.fillRect(0, 0, w, h);
     ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.lineWidth = 5; ctx.strokeRect(9, 9, w - 18, h - 18);
     ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.font = '900 76px "Zen Kaku Gothic New", sans-serif'; ctx.fillText(big, w / 2, 70);
     ctx.font = '700 30px "Zen Kaku Gothic New", sans-serif'; ctx.fillText(small, w / 2, 132);
   }, { clampS: true, clampT: true });
+  DOOR_PLATES.push(t); return t;
 }
-for (const [x, y, big, small, col] of [[XF, 0, "進む", "異変がなければ この扉から", "#1d6b45"], [XB, TOP, "引き返す", "異変を見つけたら この扉から", "#9b3a24"]])
-  bakedMesh(new THREE.PlaneGeometry(1.5, 0.49, 2, 1), patch(new THREE.MeshBasicMaterial({ vertexColors: true, map: doorPlate(big, small, col) }), 0.1), M(x, y + DOOR_H + 0.45, -0.015, Math.PI), "room");
+for (const [x, y, big, small, col, kb, ks] of [[XF, 0, "進む", "異変がなければ この扉から", "#1d6b45", "すすむ", "へんなところが なければ ここから"],
+                                               [XB, TOP, "引き返す", "異変を見つけたら この扉から", "#9b3a24", "もどる", "へんなところを 見つけたら ここから"]])
+  bakedMesh(new THREE.PlaneGeometry(1.5, 0.49, 2, 1), patch(new THREE.MeshBasicMaterial({ vertexColors: true, map: doorPlate(big, small, col, kb, ks) }), 0.1), M(x, y + DOOR_H + 0.45, -0.015, Math.PI), "room");
 
 // ---- 前廊下：消火器・避難経路図 ----
 const SW = XF - CW / 2, SE = XF + CW / 2;       // 前扉スタブの左右の壁
@@ -3515,13 +3531,18 @@ const ANOMALIES = [
 const state = { retake: false, lecture: 1, streak: 0, anomaly: null, judged: false, final: false, last: null, startedAt: 0, periodStart: 0, mode: "loading", showAnswer: false, diff: "normal", found: 0, miss: 0 };
 // 学祭モード：5コマで 朝→昼→夕方→夜→深夜 を一通り体験できるよう、時間帯を割り当て直す
 let FEST = false;
-const FEST_MAP = [0, 1, 3, 5, 7, 8];
+// 学祭モードのコマ数：5（朝→昼→夕方→夜→深夜）または 3（短めコース：朝の下見→夕方→深夜。約3〜4分。VRを長くしない・こども向け）
+let FEST_LEN = 5;
+const FEST_MAPS = { 5: [0, 1, 3, 5, 7, 8], 3: [0, 1, 5, 8] };
+// 短めコースの異変：2限・3限とも必ず出る。教室で見ればすぐわかるものだけ（後ろ扉から「もどる」だけで済む。非常口は使わない）
+const SHORT_POOL = { 2: ["desk", "board_tilt", "desk_missing", "bottles_all"], 3: ["attendance", "board"] };
 function lecturePeriod(n) {
   if (!FEST) return { ...PERIODS[n], idx: n };
-  const idx = FEST_MAP[Math.min(n, 5)];
+  const map = FEST_MAPS[FEST_LEN] || FEST_MAPS[5];
+  const idx = map[Math.min(n, map.length - 1)];
   return { ...PERIODS[idx], label: n + "限目", idx };
 }
-const goal = () => FEST ? 5 : DIFFS[state.diff].goal;
+const goal = () => FEST ? FEST_LEN : DIFFS[state.diff].goal;
 // 学祭モードの異変：見ればわかる派手なものだけを、時間帯ごとに用意する（音だけ・文字を読む・気づきにくいものは出さない）
 //   学祭モードの 2限=昼 / 3限=夕方 / 4限=夜 / 5限=深夜
 const FEST_POOL = {
@@ -3534,6 +3555,7 @@ const FEST_POOL = {
 //  そのうち1コマは必ず「廊下の異変」にする（全員が、廊下を見て非常口から戻る体験と、暗い通路を通れるように）
 const isCorridorAnomaly = (id) => ANOMALIES.find(a => a.id === id)?.loc === "廊下";
 function planFest() {
+  if (FEST_LEN === 3) { state.festPlan = new Set([2, 3]); state.festCorr = -1; state.festSeen = new Set(); return; }
   const n = Math.random() < 0.5 ? 2 : 3;
   const mid = [2, 3, 4].sort(() => Math.random() - 0.5).slice(0, n - 1);
   state.festPlan = new Set([...mid, 5]);
@@ -3544,7 +3566,7 @@ function pickFestAnomaly() {
   const band = lecturePeriod(state.lecture).band;
   const corr = state.lecture === state.festCorr;
   // 廊下のコマは廊下の異変だけ、ほかのコマは教室・扉の異変だけ（廊下ばかりにならないように）
-  const base = (FEST_POOL[band] || []).filter(id => corr ? isCorridorAnomaly(id) : !isCorridorAnomaly(id));
+  const base = FEST_LEN === 3 ? (SHORT_POOL[state.lecture] || []) : (FEST_POOL[band] || []).filter(id => corr ? isCorridorAnomaly(id) : !isCorridorAnomaly(id));
   let pool = base.filter(id => id !== state.last && !(state.exclude && state.exclude.includes(id)));
   if (corr && !pool.length) pool = base.slice();   // 廊下の異変が1種しかない時間帯でやり直したときは、同じ異変をもう一度
   const fresh = pool.filter(id => !state.festSeen.has(id));   // 同じ受講の中では、なるべく同じ異変を2度出さない
@@ -3673,7 +3695,7 @@ function judge(forward) {
     if (FEST) {
       // 学祭モード：同じコマをやり直す（戻らない）。5限以外は、異変が出るかどうかも選び直す
       //  ただし「廊下の異変」のコマは、やり直しても廊下の異変のまま（必ず1回は体験できるように）
-      if (state.lecture < 5 && state.lecture !== state.festCorr) { if (Math.random() < 0.5) state.festPlan.add(state.lecture); else state.festPlan.delete(state.lecture); }
+      if (FEST_LEN === 5 && state.lecture < 5 && state.lecture !== state.festCorr) { if (Math.random() < 0.5) state.festPlan.add(state.lecture); else state.festPlan.delete(state.lecture); }
     } else {
       const back = DIFFS[state.diff].back;
       state.streak = back === Infinity ? 0 : Math.max(0, state.streak - back);
@@ -3973,19 +3995,43 @@ function readDiff() {
   const el = document.querySelector('input[name="diff"]:checked');
   return el && DIFFS[el.value] ? el.value : "normal";
 }
+const SYL_RULES = { r1: $("syl-r1").innerHTML, r2: $("syl-r2").innerHTML, r3: $("syl-r3").innerHTML, r4: $("syl-r4").innerHTML };
+const SYL_KIDS = {
+  r1: "<b>へんなところが なければ「すすむ」、あれば「もどる」。</b>とびらの上の かんばんを 見てね。",
+  r2: "すすむ＝<b>前のとびら</b>から出て ろうかを すすむ。もどる＝<b>うしろのとびら</b>から 教室を出る。",
+  r3: "1時間目は へんなところは ないよ。教室と ろうかを よく見て おぼえよう。黒板の よこの 時間わりに はんこが たまるよ。",
+  r4: "時間が すすむと まどの外も くらくなるよ。それは へんなところでは ないよ。"
+};
+function applyKidsText() {   // 学祭モードの短めコースのときだけ、ことばをやさしくする（絵は1フレームに1枚ずつ描き直す）
+  KID.on = FEST && FEST_LEN === 3;
+  for (const k of ["r1", "r2", "r3", "r4"]) $("syl-" + k).innerHTML = KID.on ? SYL_KIDS[k] : SYL_RULES[k];
+  if (KID.on) $("syl-penalty").textContent = "まちがえても、おなじ時間を もういちど やるだけ。"; else refreshSyllabus();
+  for (const t of [...DOOR_PLATES, savingTex, corrNoticeBig]) queueTexDraw(t);
+  queueTexDraw(boardTex, drawBoard); queueTexDraw(ttTex, drawTimetable);
+}
 function refreshSyllabus() {
   const d = DIFFS[readDiff()], fest = $("chk-fest").checked;
-  $("syl-periods").textContent = fest ? "1限（朝9:00）〜5限（深夜0:00）学祭特別時間割" : d.goal > 8 ? "1限（9:00）〜8限（深夜0:00）＋補講9・10限" : "1限（9:00）〜8限（深夜0:00）";
-  $("syl-goal").textContent = fest ? "5コマすべてで正しく行動すること" : `${d.goal}回連続で正しく行動すること`;
+  $("syl-periods").textContent = fest ? (FEST_LEN === 3 ? "1限（朝）・2限（夕方）・3限（深夜）学祭特別時間割（短め）" : "1限（朝9:00）〜5限（深夜0:00）学祭特別時間割") : d.goal > 8 ? "1限（9:00）〜8限（深夜0:00）＋補講9・10限" : "1限（9:00）〜8限（深夜0:00）";
+  $("syl-goal").textContent = fest ? `${FEST_LEN}コマすべてで正しく行動すること` : `${d.goal}回連続で正しく行動すること`;
   $("syl-penalty").textContent = fest ? "判断を誤ると、同じ講義をもう一度受けることになります。" : d.back === Infinity ? "判断を誤ると、1限目（朝）からやり直しになります。" : "判断を誤ると、1コマ前の講義に戻されます。";
   // 学祭モードでは履修区分を使わない（異変と失敗のルールは学祭用に固定）
   const df = document.querySelector(".diff"); df.disabled = fest; df.style.opacity = fest ? "0.4" : "";
 }
-const DIFF_KEY = "final-lecture-diff-v1", FEST_KEY = "final-lecture-fest-v1";
+const DIFF_KEY = "final-lecture-diff-v1", FEST_KEY = "final-lecture-fest-v1", FEST_LEN_KEY = "final-lecture-festlen-v1";
 try { $("chk-fest").checked = localStorage.getItem(FEST_KEY) === "1"; } catch (e) { /* 既定はオフ */ }
+try { FEST_LEN = localStorage.getItem(FEST_LEN_KEY) === "3" ? 3 : 5; } catch (e) { /* 既定は5コマ */ }
 FEST = $("chk-fest").checked;
+for (const el of document.querySelectorAll('input[name="festlen"]')) {
+  el.checked = Number(el.value) === FEST_LEN;
+  el.addEventListener("change", () => {
+    FEST_LEN = Number(document.querySelector('input[name="festlen"]:checked').value) === 3 ? 3 : 5;
+    try { localStorage.setItem(FEST_LEN_KEY, String(FEST_LEN)); } catch (err) { /* 今回だけ */ }
+    if (state.mode === "title") { state.festPlan = null; if (FEST) planFest(); }
+    refreshSyllabus(); applyKidsText();
+  });
+}
 $("chk-fest").addEventListener("change", (e) => {
-  FEST = e.target.checked; refreshSyllabus();
+  FEST = e.target.checked; refreshSyllabus(); applyKidsText();
   for (const id of ["chk-help", "chk-help2"]) $(id).checked = helpOn();
   applyHelpVisual();
   try { localStorage.setItem(FEST_KEY, FEST ? "1" : "0"); } catch (err) { /* 保存できなくても今回は有効 */ }
@@ -3995,7 +4041,7 @@ for (const el of document.querySelectorAll('input[name="diff"]')) el.addEventLis
   refreshSyllabus();
   try { localStorage.setItem(DIFF_KEY, readDiff()); } catch (e) { /* 保存できなくても続行 */ }
 });
-refreshSyllabus();
+refreshSyllabus(); applyKidsText();
 function startGame() {
   initAudio();
   if (state.mode === "title") {
@@ -4067,7 +4113,7 @@ function logStep(L, anomaly, correct) {
     return;
   }
   if (!PLAYLOG.cur) {
-    PLAYLOG.cur = { at: new Date(Date.now() - (performance.now() - state.startedAt)).toISOString(), mode: FEST ? "fest" : state.diff, vr: renderer.xr.isPresenting, sec: 0, cleared: false, miss: 0, found: 0, steps: [] };
+    PLAYLOG.cur = { at: new Date(Date.now() - (performance.now() - state.startedAt)).toISOString(), mode: FEST ? "fest" : state.diff, len: goal(), vr: renderer.xr.isPresenting, sec: 0, cleared: false, miss: 0, found: 0, steps: [] };
     PLAYLOG.runs.push(PLAYLOG.cur);
   }
   const c = PLAYLOG.cur;
@@ -4201,7 +4247,7 @@ function showEnding() {
   logFinish(true);
   try { document.exitPointerLock?.(); } catch (e) { /* noop */ }
   const sec = Math.round((performance.now() - state.startedAt) / 1000);
-  const what = FEST ? "学祭特別時間割（5コマ）" : goal() > 8 ? "補講を含む10コマ" : "8コマ";
+  const what = FEST ? `学祭特別時間割（${FEST_LEN}コマ）` : goal() > 8 ? "補講を含む10コマ" : "8コマ";
   const [, grade, comment] = (FEST ? GRADES_FEST : GRADES).find(([m]) => state.miss <= m);
   const d = new Date(), no = String(Math.floor(Math.random() * 90000) + 10000);
   $("end-sub").textContent = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日　受講者番号 ${no}`;
@@ -4805,7 +4851,14 @@ function drawGuide(ctx, w, h) {
   // 左：受講上の注意
   col(60, "受講上の注意");
   const [five, six] = handoutRules((FEST ? "fest" : state.diff) + "|" + goal());
-  const rules = [
+  const rules = KID.on ? [
+    "一、へんなところが なければ「すすむ」、あれば「もどる」。とびらの上の かんばんを 見てね。",
+    "二、すすむ＝前のとびらから出て、ろうかを すすむ。もどる＝うしろのとびらから 教室を出る。",
+    "三、1時間目は へんなところは ないよ。教室と ろうかを よく見て おぼえよう。",
+    "四、まどの外が くらくなるのは、へんなところでは ないよ。",
+    "五、まちがえても、おなじ時間を もういちど やるだけ。",
+    `六、${goal()}時間 ぜんぶ できたら クリア！`
+  ] : [
     "一、異変がなければ「進む」、あれば「引き返す」。扉の上の案内板に従うこと。",
     "二、進む＝前扉から出て廊下を進む。引き返す＝教室では後ろ扉から、廊下では非常口から戻る。",
     "三、1限目に異変はない。講義室と廊下をよく見て覚えること。進んだコマは黒板の横の時間割に判が押される。",
