@@ -320,8 +320,8 @@ fieldset.comfort legend { font-size: 13px; color: var(--muted); padding: 0 6px; 
         <dt>単位</dt><dd id="syl-goal">8回連続で正しく行動すること</dd>
       </dl>
       <ul class="rules">
-        <li id="syl-r1"><b>おかしな所（異変）がなければ「進む」、あれば「引き返す」。</b>扉の上の案内板に従ってください。</li>
-        <li id="syl-r2">進む＝<b>前扉</b>から出て廊下を進む。引き返す＝教室では<b>後ろ扉</b>から、廊下では<b>非常口</b>から戻る。</li>
+        <li id="syl-r1">異変がなければ<b>前扉</b>から出て、廊下を進んでください。</li>
+        <li id="syl-r2">異変を見つけたら引き返してください。教室にいるときは<b>後ろ扉</b>から、廊下にいるときは<b>非常口</b>から戻ります。</li>
         <li id="syl-r3">1限目に異変はありません。大講義室と廊下をよく見て覚えてください。何コマ進んだかは、黒板の横の時間割でわかります。</li>
         <li id="syl-r4">限が進むと窓の外の時刻も進みます。空・時計・明るさの変化は異変ではありません。</li>
         <li id="syl-penalty">判断を誤ると、1限目（朝）からやり直しになります。</li>
@@ -746,6 +746,9 @@ const NIGHTL = { value: 1 };   // 以前は夜の節電で消えた廊下の灯�
 const CDIM = { value: 1 };
 // 学祭モードの短めコース（3コマ）では、黒板・案内板・掲示・ルールの紙を「こども向けのやさしいことば」にする（applyKidsText が切り替える）
 const KID = { on: false };
+// 学祭モードのときだけ出す「遊び方の案内」（扉と非常口の上の案内板・廊下の大きな掲示・黒板の注意書き）。
+// ふだんのモードでは雰囲気を壊さないよう出さない（作者 10/26「学祭以外で説明しすぎると雰囲気が壊れる」）。applyKidsText が切り替える
+const HINT = { on: false, meshes: [] };
 const CDIM_BY_BAND = { "朝": 1, "昼": 1, "夕方": 1, "夜": 0.62, "深夜": 0.55 };
 const DIM = { value: 1 };   // 教室だけ夜ほど少し暗くする（廊下は時間で変えない）
 const GRIME = { value: 0 }, AOU = { value: 0 }, SNAP = { value: new THREE.Vector2(0, 0) };
@@ -2011,6 +2014,19 @@ function drawBoard() {
     for (let i = 0; i < 14; i++) { ctx.fillStyle = `rgba(220,230,215,${0.05 + rnd() * 0.05})`; ctx.fillRect(820 + rnd() * 1000, 60 + rnd() * 330, 160 + rnd() * 260, 14 + rnd() * 30); }
     return;
   }
+  if (KID.on) {   // 短めコース（こども向け）：かんたんな板書
+    ctx.font = chalkFont(48); ctx.fillText("とくべつ じゅぎょう　かたちの おはなし", 820, 96);
+    ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.arc(930, 230, 62, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(1140, 168); ctx.lineTo(1210, 292); ctx.lineTo(1070, 292); ctx.closePath(); ctx.stroke();
+    ctx.strokeRect(1290, 172, 118, 118);
+    ctx.font = chalkFont(40); ctx.fillText("まる", 895, 350); ctx.fillText("さんかく", 1062, 350); ctx.fillText("しかく", 1295, 350);
+    ctx.font = chalkFont(56); ctx.fillText("1 + 2 + 3 = 6", 1500, 250);
+    ctx.font = chalkFont(34);
+    if (state.lecture === 1 && !state.epilogue) ctx.fillText("※ きょうは ふつうの日。教室と ろうかを よく見ておこう", 820, 440);
+    else ctx.fillText("※ へんなところが あったら もどろう", 820, 440);
+    return;
+  }
   ctx.font = chalkFont(44); ctx.fillText("解析学特論　第11回　留数定理", 820, 92);   // 板書の本文は毎回同じ（限ごとに変わると「消された板書」の異変と紛らわしい）
   ctx.font = chalkFont(56); ctx.fillText("∮_C f(z) dz = 2πi Σ Res(f, aₖ)", 820, 190);
   ctx.font = chalkFont(40); ctx.fillText("Res(f, a) = lim (z−a) f(z)", 820, 270);
@@ -2019,8 +2035,9 @@ function drawBoard() {
   for (const [px, py] of [[1660, 280], [1790, 320], [1700, 340]]) { ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.fill(); }
   ctx.beginPath(); ctx.moveTo(1880, 300); ctx.lineTo(1866, 286); ctx.moveTo(1880, 300); ctx.lineTo(1894, 286); ctx.stroke();
   ctx.font = chalkFont(34);
-  if (state.lecture === 1 && !state.epilogue) ctx.fillText(KID.on ? "※ きょうは ふつうの日。教室と ろうかを よく見ておこう" : "※ 本日は通常どおり。教室と廊下をよく見ておくこと", 820, 440);   // 1限目は下見（異変は出ない）
-  else ctx.fillText(KID.on ? "※ へんなところが あったら もどろう" : "※ 異変に気づいたら引き返すこと", 820, 440);
+  if (!HINT.on) ctx.fillText("※ 出席は扉で確認します", 820, 440);   // ふだん：遊び方の注意書きは書かない（雰囲気を優先）
+  else if (state.lecture === 1 && !state.epilogue) ctx.fillText("※ 本日は通常どおり。教室と廊下をよく見ておくこと", 820, 440);   // 学祭：1限目は下見（異変は出ない）
+  else ctx.fillText("※ 異変に気づいたら「引き返す」の扉から戻ること", 820, 440);
 }
 // ---- 時間割（前の壁、黒板の右・前扉の近く）：今日のコマと開始時刻。正しく進んだコマに判が押され、誤ると全部消える ----
 //  本家の「出口の番号」の代わり。あと何コマで終わるかがわかる。異変の材料にはしない（いつも正しい）
@@ -2527,13 +2544,30 @@ FOOTS.forEach(([x, z, yawP, side], i) => {
 });
 footprints.visible = false; scene.add(footprints);
 
+// ---- 誘導灯の絵：本物（日本の避難口・通路誘導灯）と同じ「扉の開口へ駆け込む人」 ----
+//  x, y：絵の左上、s：絵の高さ、dir：走る向き（1＝右へ、-1＝左へ。扉は走る先の側）、fg：人と扉の色、bg：地の色（人と扉の重なりの縁取り）
+function exitPicto(ctx, x, y, s, dir, fg, bg) {
+  ctx.save(); ctx.translate(x + (dir < 0 ? s * 1.25 : 0), y); ctx.scale(dir * s, s);
+  // 扉の開口（走る先の側）
+  ctx.fillStyle = fg; ctx.fillRect(0.74, 0.02, 0.48, 0.96);
+  ctx.fillStyle = bg; ctx.fillRect(0.80, 0.08, 0.36, 0.84);
+  // 走る人：太い線と丸い頭。地の色で一回り太く縁取ってから描く（扉と重なっても形が分かる）
+  const limbs = [[[0.50, 0.26], [0.40, 0.55]], [[0.48, 0.30], [0.64, 0.40], [0.78, 0.30]], [[0.48, 0.30], [0.32, 0.38], [0.20, 0.50]],
+                 [[0.40, 0.55], [0.62, 0.68], [0.68, 0.94]], [[0.40, 0.55], [0.28, 0.72], [0.08, 0.78]]];
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  for (const [col, lw, r] of [[bg, 0.17, 0.115], [fg, 0.11, 0.085]]) {
+    ctx.strokeStyle = col; ctx.lineWidth = lw;
+    for (const pts of limbs) { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (const q of pts.slice(1)) ctx.lineTo(q[0], q[1]); ctx.stroke(); }
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(0.58, 0.12, r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
 // ---- 「非常口」の異変：前扉を出た通路に、あるはずのない非常口が現れる。入るとやり直し ----
+//  避難口誘導灯：緑の地に白い絵（走る人と扉）と「非常口」
 const exitTex = canvasTex(256, 96, (ctx, w, h) => {
   ctx.fillStyle = "#1f9a4a"; ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = "#eafff0"; ctx.fillRect(10, 10, 76, 76);
-  ctx.fillStyle = "#1f9a4a"; ctx.beginPath(); ctx.arc(52, 26, 8, 0, Math.PI * 2); ctx.fill();
-  ctx.fillRect(40, 36, 16, 26); ctx.fillRect(26, 44, 18, 6); ctx.fillRect(52, 40, 18, 6); ctx.fillRect(36, 60, 8, 20); ctx.fillRect(50, 60, 8, 18);
-  ctx.fillStyle = "#eafff0"; ctx.font = '700 40px "Zen Kaku Gothic New", sans-serif'; ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.fillText("非常口", 100, h / 2 + 2);
+  exitPicto(ctx, 10, 10, 76, 1, "#f2fff4", "#1f9a4a");
+  ctx.fillStyle = "#f2fff4"; ctx.font = '700 40px "Zen Kaku Gothic New", sans-serif'; ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.fillText("非常口", 112, h / 2 + 2);
 }, { clampS: true, clampT: true });
 const exitSignMat = new THREE.MeshBasicMaterial({ map: exitTex });
 // ---- 引き戸（近づくと開く。閉まっている間は扉の向こうが見えない） ----
@@ -2551,6 +2585,15 @@ for (const [x, y0, dir] of [[XF, 0, -1], [XB, TOP, 1]]) {
   const hd = new THREE.Mesh(mergeGeos(pair(() => box(0.035, 0.22, 0.03), -dir * 0.62, 1.0, 0.035)), PROP_MATS.black); hd.position.set(-dir * 0.62, 1.0, 0); g.add(hd);
   DOORS.push({ g, x, y0, dir, open: 0, target: 0, handles: [hd] });
 }
+HINT.exitPlates = [];
+const exitHintTex = canvasTex(512, 168, (ctx, w, h) => {
+  ctx.fillStyle = "#9b3a24"; ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.lineWidth = 5; ctx.strokeRect(9, 9, w - 18, h - 18);
+  ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = '900 76px "Zen Kaku Gothic New", sans-serif'; ctx.fillText("引き返す", w / 2, 70);
+  ctx.font = '700 30px "Zen Kaku Gothic New", sans-serif'; ctx.fillText("廊下で異変を見つけたら ここから", w / 2, 132);
+}, { clampS: true, clampT: true });
+const exitHintMat = patch(new THREE.MeshBasicMaterial({ vertexColors: true, map: exitHintTex }), 0.1);
 // ---- 非常口の扉（前廊下：開けられる／後廊下：継ぎ目合わせの同じ扉）と、後ろ扉前の写し ----
 const exitDoorMat = patch(new THREE.MeshBasicMaterial({ vertexColors: true, color: 0x7f8c84 }), 0.3);
 const EXIT_DOORS = [];
@@ -2576,6 +2619,9 @@ for (const [c, oy, live] of [[CF, 0, true], [CB, TOP, false]]) {
   for (const sx of [-1, 1]) prop(box(0.08, DOOR_H + 0.1, 0.05), M(ex + sx * (EXIT_W / 2 + 0.06), oy + (DOOR_H + 0.1) / 2, LEG_Z0 + 0.05), "housing", "corr");
   prop(box(EXIT_W + 0.24, 0.08, 0.05), M(ex, oy + DOOR_H + 0.07, LEG_Z0 + 0.05), "housing", "corr");
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.21), exitSignMat); sign.position.set(ex, oy + DOOR_H + 0.3, LEG_Z0 + 0.012); scene.add(sign);
+  // 学祭モード：教室の後ろ扉と同じ「引き返す」の案内板（非常口の表示の上）。前後の廊下で同じ物を置く（ワープの継ぎ目を合わせる）
+  const hp = bakedMesh(new THREE.PlaneGeometry(1.0, 0.33, 2, 1), exitHintMat, M(ex, oy + DOOR_H + 0.66, LEG_Z0 + 0.012), "corr");
+  HINT.meshes.push(hp); HINT.exitPlates.push(hp);
   EXIT_DOORS.push({ g, live });
 }
 {
@@ -2868,15 +2914,18 @@ for (const [c, oy] of [[CF, 0], [CB, TOP]]) {
 }
 
 // ---- 扉を出たところ：廊下でのきまり（以前は節電のお知らせ。節電の消灯は 10/25 夜にやめた） ----
+//  学祭モード：廊下での遊び方。短めコース（こども向け）：非常口は使わないので「そのまま すすもう」だけ。ふだん：ただの大学のお願いの掲示
 function drawCorrNotice(ctx, w, h) {
   ctx.fillStyle = "#f4f2ec"; ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = "#24324a"; ctx.fillRect(0, 0, w, 64);
   ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.font = '700 30px "Zen Kaku Gothic New", sans-serif'; ctx.fillText(KID.on ? "みんなへ" : "受講者の方へ", w / 2, 33);
+  const kind = KID.on ? "kid" : HINT.on ? "fest" : "plain";
+  ctx.font = '700 30px "Zen Kaku Gothic New", sans-serif'; ctx.fillText({ kid: "みんなへ", fest: "受講者の方へ", plain: "お願い" }[kind], w / 2, 33);
   ctx.fillStyle = "#222"; ctx.font = '700 22px "Zen Kaku Gothic New", sans-serif'; ctx.textAlign = "left";
-  (KID.on ? ["ろうかで へんな", "ところを 見つけたら、", "ひじょうぐちから", "もどろう。"] : ["廊下で異変に", "気づいたら、", "非常口から", "引き返すこと。"]).forEach((t, i) => ctx.fillText(t, 26, 110 + i * 34));
+  ({ kid: ["ろうかを とおって", "また 教室に", "もどってくるよ。"], fest: ["廊下で異変に", "気づいたら、", "「引き返す」の案内板", "がある非常口から", "教室に戻ること。"],
+     plain: ["講義中は、", "廊下では静かに", "してください。"] })[kind].forEach((t, i) => ctx.fillText(t, 26, 110 + i * 34));
   ctx.font = '500 19px "Zen Kaku Gothic New", sans-serif'; ctx.fillStyle = "#333";
-  (KID.on ? ["なにもなければ、", "そのまま すすもう。"] : ["異変がなければ、", "そのまま進むこと。"]).forEach((t, i) => ctx.fillText(t, 26, 270 + i * 28));
+  ({ kid: ["なにもなければ、", "そのまま すすもう。"], fest: ["異変がなければ、", "そのまま進むこと。"], plain: ["ご協力を", "お願いします。"] })[kind].forEach((t, i) => ctx.fillText(t, 26, 290 + i * 28));
   ctx.font = '400 16px "Zen Kaku Gothic New", sans-serif'; ctx.fillStyle = "#444"; ctx.textAlign = "right"; ctx.fillText("教務課", w - 24, h - 34);
 }
 const savingTex = canvasTex(300, 424, drawCorrNotice, { clampS: true, clampT: true });
@@ -2885,7 +2934,7 @@ for (const [x, y] of [[XF, 0], [XB, TOP]]) bakedMesh(new THREE.PlaneGeometry(0.3
 // 前扉から出て横通路を歩くと正面に見える壁にも、大きめの同じ掲示（前廊下の非常口の使い方）
 let corrNoticeBig = null;
 { const nt = corrNoticeBig = canvasTex(600, 848, (ctx, w, h) => { ctx.save(); ctx.scale(2, 2); drawCorrNotice(ctx, w / 2, h / 2); ctx.restore(); }, { clampS: true, clampT: true });
-  bakedMesh(new THREE.PlaneGeometry(0.6, 0.85, 1, 1), patch(new THREE.MeshBasicMaterial({ vertexColors: true, map: nt }), 0.15), M(XF - JOG - CW / 2 + 0.012, 1.5, (ZM0 + ZM1) / 2 - 0.6, Math.PI / 2), "corr"); }
+  HINT.meshes.push(bakedMesh(new THREE.PlaneGeometry(0.6, 0.85, 1, 1), patch(new THREE.MeshBasicMaterial({ vertexColors: true, map: nt }), 0.15), M(XF - JOG - CW / 2 + 0.012, 1.5, (ZM0 + ZM1) / 2 - 0.6, Math.PI / 2), "corr")); }
 // ---- 教室の扉の上の案内板：前扉「進む」、後ろ扉「引き返す」（ルールを1文で：異変がなければ進む、あれば引き返す） ----
 const DOOR_PLATES = [];
 function doorPlate(bigN, smallN, col, kidBig, kidSmall) {
@@ -2901,7 +2950,7 @@ function doorPlate(bigN, smallN, col, kidBig, kidSmall) {
 }
 for (const [x, y, big, small, col, kb, ks] of [[XF, 0, "進む", "異変がなければ この扉から", "#1d6b45", "すすむ", "へんなところが なければ ここから"],
                                                [XB, TOP, "引き返す", "異変を見つけたら この扉から", "#9b3a24", "もどる", "へんなところを 見つけたら ここから"]])
-  bakedMesh(new THREE.PlaneGeometry(1.5, 0.49, 2, 1), patch(new THREE.MeshBasicMaterial({ vertexColors: true, map: doorPlate(big, small, col, kb, ks) }), 0.1), M(x, y + DOOR_H + 0.45, -0.015, Math.PI), "room");
+  HINT.meshes.push(bakedMesh(new THREE.PlaneGeometry(1.5, 0.49, 2, 1), patch(new THREE.MeshBasicMaterial({ vertexColors: true, map: doorPlate(big, small, col, kb, ks) }), 0.1), M(x, y + DOOR_H + 0.45, -0.015, Math.PI), "room"));
 
 // ---- 前廊下：消火器・避難経路図 ----
 const SW = XF - CW / 2, SE = XF + CW / 2;       // 前扉スタブの左右の壁
@@ -3133,8 +3182,7 @@ function setHandout(variant, diff) {
 
 // ---- 通路誘導灯（廊下の横通路の天井から吊るす）。異変：絵が左右反転・走る人がこちらへ向かってくる ----
 function drawSign(ctx, w, h, mode) {
-  ctx.fillStyle = "#f2f6ef"; ctx.fillRect(0, 0, w, h);
-  ctx.strokeStyle = "#1c8a45"; ctx.lineWidth = 8; ctx.strokeRect(4, 4, w - 8, h - 8);
+  ctx.fillStyle = "#f2f6ef"; ctx.fillRect(0, 0, w, h);   // 本物の通路誘導灯は緑の縁取りなし（枠は器具の灰色）
   ctx.save();
   if (mode === "flip") { ctx.translate(w, 0); ctx.scale(-1, 1); }
   ctx.fillStyle = "#1c8a45";
@@ -3144,6 +3192,12 @@ function drawSign(ctx, w, h, mode) {
     ctx.fillRect(cx - 13, 44, 26, 40);
     for (const [ox, rot] of [[-13, 2.5], [13, 0.64]]) { ctx.save(); ctx.translate(cx + ox, 50); ctx.rotate(-rot); ctx.fillRect(0, -6, 44, 12); ctx.restore(); }
     for (const [ox, rot] of [[-8, 2.0], [8, 1.14]]) { ctx.save(); ctx.translate(cx + ox, 82); ctx.rotate(rot); ctx.fillRect(0, -7, 42, 14); ctx.restore(); }
+    ctx.restore(); return;
+  }
+  if (mode !== "runner") {
+    // 通路誘導灯（本物と同じ形）：白い地に、緑の矢印と「扉の開口へ駆け込む人」。人は矢印の向きへ走る
+    ctx.beginPath(); ctx.moveTo(26, h / 2); ctx.lineTo(96, h / 2 - 42); ctx.lineTo(96, h / 2 - 17); ctx.lineTo(150, h / 2 - 17); ctx.lineTo(150, h / 2 + 17); ctx.lineTo(96, h / 2 + 17); ctx.lineTo(96, h / 2 + 42); ctx.closePath(); ctx.fill();
+    exitPicto(ctx, 186, 18, h - 36, -1, "#1c8a45", "#f2f6ef");
     ctx.restore(); return;
   }
   // 矢印
@@ -3996,15 +4050,22 @@ function readDiff() {
   return el && DIFFS[el.value] ? el.value : "normal";
 }
 const SYL_RULES = { r1: $("syl-r1").innerHTML, r2: $("syl-r2").innerHTML, r3: $("syl-r3").innerHTML, r4: $("syl-r4").innerHTML };
+const SYL_FEST = {
+  r1: "<b>おかしな所（異変）がなければ「進む」、あれば「引き返す」。</b>",
+  r2: "「進む」の案内板がある<b>前扉</b>から廊下へ。異変を見つけたら「引き返す」の案内板があるところ（教室では<b>後ろ扉</b>、廊下では<b>非常口</b>）から教室に戻る。"
+};
 const SYL_KIDS = {
   r1: "<b>へんなところが なければ「すすむ」、あれば「もどる」。</b>とびらの上の かんばんを 見てね。",
-  r2: "すすむ＝<b>前のとびら</b>から出て ろうかを すすむ。もどる＝<b>うしろのとびら</b>から 教室を出る。",
+  r2: "なにもなければ「すすむ」の かんばんの とびらから ろうかへ。へんなところを 見つけたら「もどる」の かんばんが あるところから 教室に もどろう。",
   r3: "1時間目は へんなところは ないよ。教室と ろうかを よく見て おぼえよう。黒板の よこの 時間わりに はんこが たまるよ。",
   r4: "時間が すすむと まどの外も くらくなるよ。それは へんなところでは ないよ。"
 };
-function applyKidsText() {   // 学祭モードの短めコースのときだけ、ことばをやさしくする（絵は1フレームに1枚ずつ描き直す）
-  KID.on = FEST && FEST_LEN === 3;
-  for (const k of ["r1", "r2", "r3", "r4"]) $("syl-" + k).innerHTML = KID.on ? SYL_KIDS[k] : SYL_RULES[k];
+function applyKidsText() {   // 学祭モードの案内の出し入れと、短めコースのやさしいことば（絵は1フレームに1枚ずつ描き直す）
+  KID.on = FEST && FEST_LEN === 3; HINT.on = FEST;
+  for (const m of HINT.meshes) m.visible = HINT.on;
+  for (const m of HINT.exitPlates) m.visible = HINT.on && !KID.on;   // 短めコースでは非常口を使わないので出さない
+  for (const k of ["r1", "r2"]) $("syl-" + k).innerHTML = KID.on ? SYL_KIDS[k] : FEST ? SYL_FEST[k] : SYL_RULES[k];
+  for (const k of ["r3", "r4"]) $("syl-" + k).innerHTML = KID.on ? SYL_KIDS[k] : SYL_RULES[k];
   if (KID.on) $("syl-penalty").textContent = "まちがえても、おなじ時間を もういちど やるだけ。"; else refreshSyllabus();
   for (const t of [...DOOR_PLATES, savingTex, corrNoticeBig]) queueTexDraw(t);
   queueTexDraw(boardTex, drawBoard); queueTexDraw(ttTex, drawTimetable);
@@ -4853,14 +4914,16 @@ function drawGuide(ctx, w, h) {
   const [five, six] = handoutRules((FEST ? "fest" : state.diff) + "|" + goal());
   const rules = KID.on ? [
     "一、へんなところが なければ「すすむ」、あれば「もどる」。とびらの上の かんばんを 見てね。",
-    "二、すすむ＝前のとびらから出て、ろうかを すすむ。もどる＝うしろのとびらから 教室を出る。",
+    "二、なにもなければ「すすむ」の かんばんの とびらから ろうかへ。へんなところを 見つけたら「もどる」の かんばんが あるところから 教室に もどろう。",
     "三、1時間目は へんなところは ないよ。教室と ろうかを よく見て おぼえよう。",
     "四、まどの外が くらくなるのは、へんなところでは ないよ。",
     "五、まちがえても、おなじ時間を もういちど やるだけ。",
     `六、${goal()}時間 ぜんぶ できたら クリア！`
   ] : [
-    "一、異変がなければ「進む」、あれば「引き返す」。扉の上の案内板に従うこと。",
-    "二、進む＝前扉から出て廊下を進む。引き返す＝教室では後ろ扉から、廊下では非常口から戻る。",
+    ...(HINT.on ? ["一、異変がなければ「進む」、あれば「引き返す」。",
+      "二、「進む」の案内板がある前扉から廊下へ。異変を見つけたら「引き返す」の案内板があるところ（教室では後ろ扉、廊下では非常口）から教室に戻る。"]
+    : ["一、異変がなければ、前扉から出て廊下を進むこと。",
+      "二、異変を見つけたら引き返すこと。教室にいるときは後ろ扉から、廊下にいるときは非常口から戻る。"]),
     "三、1限目に異変はない。講義室と廊下をよく見て覚えること。進んだコマは黒板の横の時間割に判が押される。",
     "四、窓の外の時刻や明るさの変化は、異変ではない。",
     five, six,
