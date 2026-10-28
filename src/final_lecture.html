@@ -1836,10 +1836,24 @@ const laptopTex = canvasTex(256, 168, (ctx, w, h) => {
   }
 }, { clampS: true, clampT: true });
 const laptopMat = new THREE.MeshBasicMaterial({ map: laptopTex });
+// 忘れ物はまとめて1つの形にする（学祭モードでは消すため、ほかの小物と分ける。10/28 作者「学祭では小物の確認に時間を使うし、
+//  小物の異変も学祭では出ないので消してよい」）。材質はノートの白（sill）1つにして、ほかの色は光の値に色を掛けて出す（描画命令は1回）
+const DESK_ITEMS = { geos: [], group: new THREE.Group() };
+scene.add(DESK_ITEMS.group);
+function itemProp(geo, matrix, key) {
+  const g = geo.index ? geo.toNonIndexed() : geo.clone();
+  g.applyMatrix4(matrix); bake(g, "room");
+  const c = new THREE.Color(PROP_COLORS_CLEAN[key] ?? PROP_COLORS[key]), w = new THREE.Color(PROP_COLORS_CLEAN.sill);
+  const k = [c.r / w.r, c.g / w.g, c.b / w.b], kl = (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / (0.2126 * w.r + 0.7152 * w.g + 0.0722 * w.b);
+  const col = g.attributes.color.array; for (let i = 0; i < col.length; i++) col[i] *= k[i % 3];
+  for (const a of ["aFlick", "aRow", "aSun", "aNightL"]) { const A = g.attributes[a].array; for (let i = 0; i < A.length; i++) A[i] *= kl; }
+  DESK_ITEMS.geos.push(g);
+}
+PROP_COLORS_CLEAN.bottle = PROP_COLORS.bottle = 0xa9cfe0;
 {
   const t = 2, x = deskX(t), y = deskTop(t), z = -12.9;
-  prop(box(0.24, 0.018, 0.34), M(x + 0.02, y + 0.009, z), "metal", "room");                  // 本体（キーボード側が座席）
-  const lid = new THREE.Group(); lid.position.set(x - 0.1, y + 0.018, z); lid.rotation.z = -0.32; scene.add(lid);
+  itemProp(box(0.24, 0.018, 0.34), M(x + 0.02, y + 0.009, z), "metal");                  // 本体（キーボード側が座席）
+  const lid = new THREE.Group(); lid.position.set(x - 0.1, y + 0.018, z); lid.rotation.z = -0.32; DESK_ITEMS.group.add(lid);
   const back = box(0.012, 0.22, 0.34); bake(back, "room", M(x - 0.1, y + 0.13, z)); const bm = new THREE.Mesh(back, PROP_MATS.metal); bm.position.set(0, 0.11, 0); lid.add(bm);
   const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.31, 0.2), laptopMat); scr.position.set(0.008, 0.115, 0); scr.rotation.y = Math.PI / 2; lid.add(scr);
 }
@@ -1856,16 +1870,16 @@ function mergeGeosSimple(list) {
   return out;
 }
 const bottleMat = patch(new THREE.MeshBasicMaterial({ vertexColors: true, color: 0xa9cfe0 }), 0.1);
-for (const [t, z] of [[1, -3.1], [4, -13.4]]) bakedMesh(BOTTLE_GEO.clone(), bottleMat, M(deskX(t) - 0.08, deskTop(t), z), "room");
+for (const [t, z] of [[1, -3.1], [4, -13.4]]) itemProp(BOTTLE_GEO, M(deskX(t) - 0.08, deskTop(t), z), "bottle");
 // ノートとペン
-prop(box(0.21, 0.012, 0.3), M(deskX(3) - 0.02, deskTop(3) + 0.006, -2.6, 0.12), "sill", "room");
-prop(new THREE.CylinderGeometry(0.006, 0.006, 0.14, 6), M(deskX(3) + 0.08, deskTop(3) + 0.016, -2.4, 0, 0, Math.PI / 2), "black", "room");
+itemProp(box(0.21, 0.012, 0.3), M(deskX(3) - 0.02, deskTop(3) + 0.006, -2.6, 0.12), "sill");
+itemProp(new THREE.CylinderGeometry(0.006, 0.006, 0.14, 6), M(deskX(3) + 0.08, deskTop(3) + 0.016, -2.4, 0, 0, Math.PI / 2), "black");
 // 傘（机の端に立てかけ）・上着（背もたれに掛けたまま）
 //  傘は「棒」に見えないよう、たたんだ布のふくらみ・留めバンド・石突き・J字の持ち手をつけ、
 //  学生側（机と長椅子のあいだ）で机のふちに立てかける（教壇からはほぼ見えない）
 {
   const t = 0, th = 0.27, base = M(deskX(t) + 0.45, (t + 1) * R, -6.5, 0, 0, th);
-  const up = (geo, x, y, key, rz = 0) => prop(geo, base.clone().multiply(M(x, y, 0, 0, 0, rz)), key, "room");
+  const up = (geo, x, y, key, rz = 0) => itemProp(geo, base.clone().multiply(M(x, y, 0, 0, 0, rz)), key);
   const canopy = new THREE.LatheGeometry([[0.004, 0], [0.012, 0.04], [0.026, 0.25], [0.036, 0.5], [0.036, 0.56], [0.024, 0.62], [0.007, 0.65]].map(([r, y]) => new THREE.Vector2(r, y)), 8);
   up(new THREE.CylinderGeometry(0.004, 0.005, 0.05, 6), 0, 0.025, "metal");          // 石突き
   up(canopy, 0, 0.04, "umbrella");                                                   // たたんだ布（8枚の折り目）
@@ -1875,7 +1889,8 @@ prop(new THREE.CylinderGeometry(0.006, 0.006, 0.14, 6), M(deskX(3) + 0.08, deskT
   up(new THREE.TorusGeometry(0.035, 0.011, 6, 14, Math.PI), 0.035, 0.9, "black");     // J字の曲がり
   up(new THREE.CylinderGeometry(0.011, 0.011, 0.03, 8), 0.07, 0.885, "black");        // 曲がりの先
 }
-prop(box(0.09, 0.46, 0.52), M(deskX(2) + 0.74, 3 * R + 0.6, -4.1), "seat", "room");
+itemProp(box(0.09, 0.46, 0.52), M(deskX(2) + 0.74, 3 * R + 0.6, -4.1), "seat");   // 上着
+DESK_ITEMS.group.add(new THREE.Mesh(mergeGeos(DESK_ITEMS.geos), PROP_MATS.sill));
 // 異変「全員分の忘れ物」：すべての席の机に、同じペットボトルが一本ずつ
 const bottlesAll = (() => {
   // 以前は1本を何十回も描く「インスタンス」だったが、頂点の情報（光・はね返り）が多くなり、
@@ -4066,6 +4081,7 @@ const SYL_KIDS = {
 };
 function applyKidsText() {   // 学祭モードの案内の出し入れと、短めコースのやさしいことば（絵は1フレームに1枚ずつ描き直す）
   KID.on = FEST && FEST_LEN === 3; HINT.on = FEST;
+  DESK_ITEMS.group.visible = !FEST;   // 学祭モードでは机の忘れ物を置かない（確かめる物を減らす。小物の異変は学祭では出ない）
   for (const m of HINT.meshes) m.visible = HINT.on;
   for (const m of HINT.exitPlates) m.visible = HINT.on && !KID.on;   // 短めコースでは非常口を使わないので出さない
   for (const k of ["r1", "r2"]) $("syl-" + k).innerHTML = KID.on ? SYL_KIDS[k] : FEST ? SYL_FEST[k] : SYL_RULES[k];
