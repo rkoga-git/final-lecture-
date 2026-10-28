@@ -132,8 +132,7 @@ button:focus-visible { outline: 2px solid var(--blood); outline-offset: 2px; }
 .sheet button { border-color: var(--panel-edge); color: var(--ink); background: #18201d; width: 100%; }
 .sheet button.primary { background: var(--accent); color: #101413; border-color: var(--accent); }
 details.staff { margin: 14px 0 4px; font-size: 13px; color: var(--muted); }
-.festlen { font-size: 13px; margin: -8px 0 16px 26px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
-.festlen label { cursor: pointer; }
+.festcourse { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 details.staff > summary { cursor: pointer; padding: 4px 2px; opacity: .8; }
 details.staff[open] > summary { margin-bottom: 10px; }
 fieldset.comfort { border: 1px solid rgba(255,255,255,.14); border-radius: 8px; padding: 4px 12px 6px; margin: 4px 0 14px; }
@@ -332,6 +331,12 @@ fieldset.comfort legend { font-size: 13px; color: var(--muted); padding: 0 6px; 
         <label><input type="radio" name="diff" value="normal" id="diff-normal" checked><span><b>履修</b><small>すべての異変。間違えると1限目へ戻る</small></span></label>
         <label><input type="radio" name="diff" value="hard" id="diff-hard"><span><b>再履修</b><small>気づきにくい異変が多い。深夜の補講まで全10限</small></span></label>
       </fieldset>
+      <!-- 学祭モードのときだけ：遊ぶ人に合わせてコースを選ぶ（ふつうの人は5コマ、こどもは3コマ。10/28 作者） -->
+      <fieldset class="diff festcourse" id="festlen-box" hidden>
+        <legend>コース（学祭）</legend>
+        <label><input type="radio" name="festlen" value="5" checked><span><b>ふつう</b><small>5コマ（約5分）。朝から深夜まで</small></span></label>
+        <label><input type="radio" name="festlen" value="3"><span><b>こども</b><small>3コマ（約3〜4分）。やさしいことば・はっきりした異変だけ</small></span></label>
+      </fieldset>
       <div class="slot-comfort" id="slot-comfort-title"></div>
       <div class="actions">
         <button class="primary" id="btn-start" type="button">講義室に入る</button>
@@ -345,10 +350,6 @@ fieldset.comfort legend { font-size: 13px; color: var(--muted); padding: 0 6px; 
           <label class="bright">画面の明るさ <input type="range" id="gfx-bright" min="0.6" max="1.6" step="0.05" value="1"> <small>暗い部屋では少し上げてください</small></label>
         </div>
         <label class="fest"><input type="checkbox" id="chk-fest"><span>学祭モード <small>朝から深夜までを短く駆け抜けます。異変は見ればわかるものだけ。間違えても同じコマをやり直すだけ</small></span></label>
-        <div class="festlen">学祭モードの長さ：
-          <label><input type="radio" name="festlen" value="5" checked> 5コマ（約5分）</label>
-          <label><input type="radio" name="festlen" value="3"> 3コマ・短め（約3〜4分。こども向けのことば）</label>
-        </div>
         <label class="fest"><input type="checkbox" id="chk-hq" checked><span>高画質 <small>光の回り込み・くっきりした影・細かい模様。重い・見にくいと感じたら外すと以前の見た目に戻ります</small></span></label>
         <label class="fest"><input type="checkbox" id="chk-help"><span>お助け掲示板 <small>判断を誤ると、教室の後ろの掲示板に見逃した異変が貼られます</small></span></label>
         <div class="actions"><button id="btn-records" type="button">プレイ記録</button></div>
@@ -4096,20 +4097,24 @@ function refreshSyllabus() {
   $("syl-goal").textContent = fest ? `${FEST_LEN}コマすべてで正しく行動すること` : `${d.goal}回連続で正しく行動すること`;
   $("syl-penalty").textContent = fest ? "判断を誤ると、同じ講義をもう一度受けることになります。" : d.back === Infinity ? "判断を誤ると、1限目（朝）からやり直しになります。" : "判断を誤ると、1コマ前の講義に戻されます。";
   // 学祭モードでは履修区分を使わない（異変と失敗のルールは学祭用に固定）
-  const df = document.querySelector(".diff"); df.disabled = fest; df.style.opacity = fest ? "0.4" : "";
+  const df = document.querySelector(".diff"); df.hidden = fest;   // 学祭モードでは履修区分の代わりにコース（ふつう／こども）を出す
+  $("festlen-box").hidden = !fest;
 }
 const DIFF_KEY = "final-lecture-diff-v1", FEST_KEY = "final-lecture-fest-v1", FEST_LEN_KEY = "final-lecture-festlen-v1";
 try { $("chk-fest").checked = localStorage.getItem(FEST_KEY) === "1"; } catch (e) { /* 既定はオフ */ }
 try { FEST_LEN = localStorage.getItem(FEST_LEN_KEY) === "3" ? 3 : 5; } catch (e) { /* 既定は5コマ */ }
 FEST = $("chk-fest").checked;
+// 学祭のコース（5コマ／3コマ）を変える。タイトルのラジオボタンと、VRの「はじめる前に」のメニューから使う
+function setFestLen(n) {
+  FEST_LEN = n === 3 ? 3 : 5;
+  for (const el of document.querySelectorAll('input[name="festlen"]')) el.checked = Number(el.value) === FEST_LEN;
+  try { localStorage.setItem(FEST_LEN_KEY, String(FEST_LEN)); } catch (err) { /* 今回だけ */ }
+  if (state.mode === "title" || (state.lecture === 1 && state.streak === 0)) { state.festPlan = null; if (FEST) planFest(); }   // まだ始まっていなければ、異変の予定を立て直す
+  refreshSyllabus(); applyKidsText();
+}
 for (const el of document.querySelectorAll('input[name="festlen"]')) {
   el.checked = Number(el.value) === FEST_LEN;
-  el.addEventListener("change", () => {
-    FEST_LEN = Number(document.querySelector('input[name="festlen"]:checked').value) === 3 ? 3 : 5;
-    try { localStorage.setItem(FEST_LEN_KEY, String(FEST_LEN)); } catch (err) { /* 今回だけ */ }
-    if (state.mode === "title") { state.festPlan = null; if (FEST) planFest(); }
-    refreshSyllabus(); applyKidsText();
-  });
+  el.addEventListener("change", () => setFestLen(Number(document.querySelector('input[name="festlen"]:checked').value)));
 }
 $("chk-fest").addEventListener("change", (e) => {
   FEST = e.target.checked; refreshSyllabus(); applyKidsText();
@@ -5033,6 +5038,7 @@ function vrMenuItems() {
     return [
       preset("VRに慣れている人向け", COMFORT_DEFAULT),
       preset("酔いやすい人向け", COMFORT_SICK),
+      ...(FEST ? [[`コース：${FEST_LEN === 3 ? "こども（3コマ）" : "ふつう（5コマ）"}`, () => { setFestLen(FEST_LEN === 3 ? 5 : 3); drawVrMenu(); }]] : []),   // 学祭：遊ぶ人に合わせて部員が選ぶ
       turnItem(), vignetteItem(), dashItem(),
       [`お助け掲示板：${helpOn() ? "オン" : "オフ"}`, () => { setHelp(!helpOn()); drawVrMenu(); }],
       ["この設定ではじめる", () => { closeVrMenu(); startIntro(); }]
@@ -5849,7 +5855,7 @@ addEventListener("resize", resize);
 
 // テスト用フック
 window.__fl = {
-  initAudio, audio: () => ({ AC, master, knockBus }), updatePassage,
+  initAudio, audio: () => ({ AC, master, knockBus }), updatePassage, goal, setFestLen,
   state, judge, prepareLecture, applyAnomaly, pointFloor, walkable, pickAnomaly, ANOMALIES, camera,
   get rig() { return rig.position; },
   setPose(x, z, ry, p = 0) { curFloor = pointFloor(x, z); rig.position.set(x, curFloor, z); yaw = ry; pitch = p; update(0); },
