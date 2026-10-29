@@ -193,10 +193,13 @@ fieldset.comfort legend { font-size: 13px; color: var(--muted); padding: 0 6px; 
 #caption .line { display: block; }
 #caption.friend .line { color: #f6dfb0; }
 #caption.self .line { color: #b8b4a9; font-weight: 500; font-size: .9em; }
-/* 操作のメモ（学祭モードで遊んでいる間だけ、画面の左下に小さく。10/29 午後 遊んだ人の意見） */
-#ctrl-hint { position: fixed; left: max(14px, env(safe-area-inset-left, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); z-index: 7; pointer-events: none; white-space: pre; padding: 8px 12px; border-radius: 4px; background: rgba(8, 10, 10, .5); font: 500 12.5px/1.75 "Zen Kaku Gothic New", sans-serif; letter-spacing: .06em; color: rgba(233, 228, 214, .82); }
+/* 1限目の道案内（学祭モード）：やさしい緑の字。半透明の帯の上に */
+#caption.tutor { bottom: calc(env(safe-area-inset-bottom, 0px) + 14%); width: max-content; }   /* 画面の半分で折り返さないように */
+#caption.tutor .line { display: inline-block; padding: 8px 18px 9px; border-radius: 4px; background: rgba(8, 14, 10, .62); color: #d6ead0; font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 700; font-size: .82em; letter-spacing: .08em; text-shadow: none; }
+/* 操作のメモ（学祭モードで遊んでいる間だけ、画面の左側に小さく。10/29 午後 遊んだ人の意見。10/29 夜 作者「左下すぎて普通にプレイしていたら見えない」→ 下から 26% の高さへ上げ、少し大きく） */
+#ctrl-hint { position: fixed; left: max(18px, env(safe-area-inset-left, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 26vh); z-index: 7; pointer-events: none; white-space: pre; padding: 10px 14px; border-radius: 5px; background: rgba(8, 10, 10, .55); font: 500 15px/1.75 "Zen Kaku Gothic New", sans-serif; letter-spacing: .06em; color: rgba(233, 228, 214, .82); }
 #ctrl-hint b { display: inline-block; min-width: 4.6em; font-weight: 700; color: #f0e7cf; }
-#perf:not([hidden]) ~ #ctrl-hint { bottom: calc(env(safe-area-inset-bottom, 0px) + 90px); }   /* 重さの表示（スタッフ用）と重ならないように */
+
 #perf { position: fixed; left: max(10px, env(safe-area-inset-left, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); z-index: 11; pointer-events: none; white-space: pre; font: 600 12px/1.6 ui-monospace, Menlo, Consolas, monospace; color: #b7f0a8; background: rgba(0, 0, 0, .6); padding: 4px 8px; border-radius: 3px; }
 #skip-hint { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); z-index: 8; font-size: 12px; letter-spacing: .12em; color: rgba(233, 228, 214, .45); pointer-events: none; }
 .ending p.cert-note { font-family: var(--display); font-size: 13.5px; letter-spacing: .1em; margin: 0 0 14px; }
@@ -466,7 +469,7 @@ fieldset.comfort legend { font-size: 13px; color: var(--muted); padding: 0 6px; 
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 
 // 版：Quest のブラウザが古いページを出したままのことがあるので、タイトルと VR の「はじめる前に」に小さく出す（10/29）。更新のたびに書き換える
-const BUILD = "2026-10-29c";
+const BUILD = "2026-10-29d";
 document.getElementById("build-tag").textContent = "版 " + BUILD;
 
 // ============================================================================
@@ -3807,6 +3810,7 @@ function resetRun() {
   Object.assign(state, { retake: false, lecture: 1, streak: 0, anomaly: null, judged: false, final: false, last: null, startedAt: performance.now(), periodStart: performance.now(), found: 0, miss: 0, festPlan: null, festSeen: null, festCorr: null, epilogue: false, dbgRun: false });
   Object.assign(PASS, { uses: 0, lastUse: -9, festDone: false });   // 暗い通路の怪異は受講ごとに数え直す（学祭は次の人にも起きるように）
   if (FEST) planFest();
+  try { tutorReset(); } catch (e) { /* 起動の途中（道案内の準備より前）に呼ばれたとき */ }
   resetStory();
   resetClimax(); resetExit();
   if (typeof hideVrCert === "function") hideVrCert();
@@ -4998,13 +5002,13 @@ function hideVrCert() { if (CERT.mesh) CERT.mesh.visible = false; }
 const CTRL_HINT = {
   pc: [["WASD", "移動"], ["マウス", "見回す"], ["E", "調べる・非常口を開ける"], ["R", "ルール"], ["Esc", "一時停止"]],
   pcKid: [["WASD", "あるく"], ["マウス", "まわりを見る"], ["E", "しらべる"], ["R", "ルール"], ["Esc", "とめる"]],
-  vr: [["左スティック", "歩く"], ["右スティック", "向きを変える"], ["トリガー", "調べる・非常口を開ける"], ["Y", "ルール"], ["X", "メニュー"]],
-  vrKid: [["左スティック", "あるく"], ["右スティック", "むきを かえる"], ["トリガー", "しらべる"], ["Y", "ルール"], ["X", "メニュー"]],
+  vr: [["左スティック", "歩く"], ["＋左トリガー", "走る"], ["右スティック", "向きを変える"], ["トリガー", "調べる・非常口を開ける"], ["Y", "ルール"], ["X", "メニュー"]],
+  vrKid: [["左スティック", "あるく"], ["＋左トリガー", "はしる"], ["右スティック", "むきを かえる"], ["トリガー", "しらべる"], ["Y", "ルール"], ["X", "メニュー"]],
   shownKey: "", mesh: null, tex: null, vrKey: ""
 };
 function ctrlHintRows(vr) { return vr ? (KID.on ? CTRL_HINT.vrKid : CTRL_HINT.vr) : (KID.on ? CTRL_HINT.pcKid : CTRL_HINT.pc); }
 function drawCtrlHintCard() {
-  const ctx = CTRL_HINT.tex.userData.ctx, w = 640, h = 320, G = '"Zen Kaku Gothic New", sans-serif';
+  const ctx = CTRL_HINT.tex.userData.ctx, w = 640, h = 384, G = '"Zen Kaku Gothic New", sans-serif';
   ctx.clearRect(0, 0, w, h); ctx.fillStyle = "rgba(10,13,12,.86)"; ctx.fillRect(0, 0, w, h);
   ctx.strokeStyle = "rgba(233,228,214,.35)"; ctx.lineWidth = 3; ctx.strokeRect(2, 2, w - 4, h - 4);
   ctx.textBaseline = "middle";
@@ -5014,6 +5018,37 @@ function drawCtrlHintCard() {
     ctx.fillStyle = "#d8d3c4"; ctx.font = `500 28px ${G}`; ctx.fillText(v, 200, y);
   });
   CTRL_HINT.tex.needsUpdate = true;
+}
+// ---- 1限目の道案内（10/29 夜 作者「最初にルールを出しても、なかなか読んでくれない人がいる」→ 遊びながら伝える）----
+//  学祭モードだけ。最初のコマ（下見）の要所で、短い字幕を数秒ずつ出す。読まなくても、やっていれば分かるように。
+//  ① 遊び始め「まず教室を見て覚える」② 教室に9秒いたら「見終わったら『進む』の扉から」③ 廊下に出たら「廊下も見る。このまま進むと次へ」
+//  ④ 2限目に入ったら「ここから異変が出るかも。見つけたら『引き返す』へ」。受講をやり直すと、また①から
+const TUTOR = { step: 0, roomT: 0, left: 0, shown: false };   // left：いまの字幕を出しておく残りの秒数（遊んでいる時間で数える）
+const TUTOR_TEXT = {
+  std: ["まずは、教室をよく見て覚えておこう", "見終わったら、「進む」の案内板がある前扉から廊下へ", "廊下もよく見ておこう。このまま進むと、次の講義へ",
+        "ここからは異変が出るかも。おかしいと思ったら「引き返す」へ"],
+  kid: ["まずは 教室を よく見て、おぼえよう", "見おわったら「すすむ」の かんばんの とびらから ろうかへ", "ろうかも よく見ておこう。このまま すすむと つぎの じかんへ",
+        "ここからは へんなところが あるかも。へんだと思ったら「もどる」へ"]
+};
+function tutorReset() { Object.assign(TUTOR, { step: 0, roomT: 0, left: 0, shown: false }); }
+function tutorSay(i, sec) {
+  caption((KID.on ? TUTOR_TEXT.kid : TUTOR_TEXT.std)[i], "tutor");
+  TUTOR.shown = true; TUTOR.left = sec; TUTOR.step = i + 1;
+}
+function updateTutor(dt) {
+  if (TUTOR.shown && state.mode === "play") TUTOR.left -= dt;
+  if (TUTOR.shown && (TUTOR.left <= 0 || state.mode !== "play")) { TUTOR.shown = false; caption(null); }
+  if (!FEST || state.mode !== "play" || state.final || TUTOR.step >= 4) return;
+  const h = headPos(), inRoom = h.z < -0.3, inCorr = h.z > WALL_T + 0.3;
+  if (state.lecture === 1) {
+    if (inRoom) TUTOR.roomT += dt;
+    if (TUTOR.step === 0) tutorSay(0, 5);
+    else if (TUTOR.step === 1 && TUTOR.roomT > 9 && !TUTOR.shown) tutorSay(1, 7);
+    else if (TUTOR.step <= 2 && inCorr && !TUTOR.shown) tutorSay(2, 6);
+  } else if (state.lecture === 2 && TUTOR.step >= 1) {   // 2限目に入った（廊下の先で切り替わった）
+    if (TUTOR.shown) { TUTOR.shown = false; caption(null); }
+    tutorSay(3, 7);
+  }
 }
 function updateCtrlHint() {
   const vr = renderer.xr.isPresenting, on = FEST && state.mode === "play" && !DEMO.on;
@@ -5027,8 +5062,8 @@ function updateCtrlHint() {
   const grip = VR_GRIPS.find(g => g.userData.on && g.userData.hand === "left");
   const vrOn = on && vr && !!grip && !(CERT.mesh && CERT.mesh.visible);
   if (vrOn && !CTRL_HINT.mesh) {
-    CTRL_HINT.tex = canvasTex(640, 320, () => {}, { clampS: true, clampT: true });
-    CTRL_HINT.mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.13, 0.065), new THREE.MeshBasicMaterial({ map: CTRL_HINT.tex, transparent: true, depthTest: false, fog: false }));
+    CTRL_HINT.tex = canvasTex(640, 384, () => {}, { clampS: true, clampT: true });
+    CTRL_HINT.mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.13, 0.078), new THREE.MeshBasicMaterial({ map: CTRL_HINT.tex, transparent: true, depthTest: false, fog: false }));
     CTRL_HINT.mesh.renderOrder = 13;
   }
   if (CTRL_HINT.mesh) {
@@ -5160,7 +5195,7 @@ function drawGuide(ctx, w, h) {
     ["左スティック", "歩く"],
     ["右スティック", COMFORT.turn === "snap" ? "向きを変える（30°ずつ）" : "向きを変える"],
     ["トリガー", "調べる・非常口を開ける"],
-    ["左スティック押し込み", COMFORT.dash ? "ダッシュの切り替え" : "ダッシュ（設定でオフ）"],
+    ["歩きながら左トリガー", COMFORT.dash ? "走る（握っている間）" : "走る（設定でオフ）"],
     ["Y／B ボタン", "この紙をもう一度見る"],
     ["X／A ボタン", "一時停止・設定"]
   ] : [
@@ -5548,8 +5583,13 @@ function vrMessage(text, who) {
     ctx.fillStyle = "#f0d6a0"; ctx.font = `700 32px ${G}`; ctx.fillText("友　達", 512, 48);
     cy = 160;
   }
-  ctx.fillStyle = who === "friend" ? "#f6dfb0" : who === "self" ? "#b8b4a9" : "#e9e4d6";
-  ctx.font = `${who === "self" ? 600 : 800} ${who === "self" ? 58 : 64}px "Shippori Mincho B1", serif`;
+  ctx.fillStyle = who === "friend" ? "#f6dfb0" : who === "self" ? "#b8b4a9" : who === "tutor" ? "#d6ead0" : "#e9e4d6";
+  ctx.font = who === "tutor" ? `700 48px ${G}` : `${who === "self" ? 600 : 800} ${who === "self" ? 58 : 64}px "Shippori Mincho B1", serif`;
+  if (who === "tutor") {   // 道案内は文が長いので、板の幅（960px）に収まるように文字を小さくする
+    const wMax = Math.max(...text.split("\n").map(l => ctx.measureText(l).width));
+    if (wMax > 960) ctx.font = `700 ${Math.floor(48 * 960 / wMax)}px ${G}`;
+  }
+  vrPanel.position.set(0, who === "tutor" ? -0.42 : 0, -1.4);   // 道案内は視界の下のほう（教室を見る邪魔にならないように）
   text.split("\n").forEach((line, i, arr) => ctx.fillText(line, 512, cy + (i - (arr.length - 1) / 2) * 80));
   vrPanel.material.map.needsUpdate = true; vrPanel.visible = true;
 }
@@ -5562,7 +5602,9 @@ $("btn-vr").addEventListener("click", async () => {
     if (!ok) { fail("この端末ではVRを開始できません。Quest 3 のブラウザで単体版のページを開いてください。"); return; }
     const session = await navigator.xr.requestSession("immersive-vr", { optionalFeatures: ["local-floor", "bounded-floor"] });
     state.diff = readDiff(); resetRun(); applyXrScale(); await renderer.xr.setSession(session);
-    session.addEventListener("select", () => {
+    session.addEventListener("select", (ev) => {
+      const src = ev && ev.inputSource;
+      if (src && src.handedness === "left" && src._dashUsed && state.mode === "play") { src._dashUsed = false; return; }   // 走るのに使った左トリガー
       if (state.mode === "intro" || state.mode === "epilogue") { skipStory(); return; }
       if (state.mode === "ending") { if (performance.now() - CERT.shownAt > 2500) vrNextPlayer(); return; }   // クリア後は次の人の設定画面へ
       if (vrSelect()) return;
@@ -5592,7 +5634,7 @@ const fwd = new THREE.Vector3(), right = new THREE.Vector3();
 function update(dt) {
   let moving = false;
   if (renderer.xr.isPresenting) pollVrButtons();
-  updateCtrlHint(); updateLobby(dt);
+  updateCtrlHint(); updateLobby(dt); updateTutor(dt);
   if (state.mode === "play") {
     let mx = 0, mz = 0;
     if (renderer.xr.isPresenting) {
@@ -5606,9 +5648,14 @@ function update(dt) {
         const ax = Math.abs(gp.axes[2]) > 0.15 ? gp.axes[2] : 0, ay = Math.abs(gp.axes[3]) > 0.15 ? gp.axes[3] : 0;
         if (src.handedness === "left") {
           mx = ax; mz = -ay;
-          const pressed = gp.buttons[3]?.pressed;
-          if (pressed && !src._wasPressed && COMFORT.dash) sprint = !sprint;   // ダッシュは設定でオフにできる
-          src._wasPressed = pressed;
+          // ダッシュ（10/29 夜 遊んだ人「スティックの押し込みより、トリガーで走れた方が分かりやすい」→ 作者が選択）：
+          //  左スティックで歩きながら左トリガーを握っている間だけ走る。止まっているときの左トリガーは、今までどおり「調べる」。
+          //  走るのに使った押し込みは、離したときの「調べる」（select）に数えない（`_dashUsed`、select の受け口で見る）。右トリガーはいつも「調べる」
+          const trig = !!gp.buttons[0]?.pressed, walking = Math.hypot(ax, ay) > 0.15;
+          if (trig && !src._trigPrev) src._dashUsed = false;
+          if (trig && walking && COMFORT.dash) src._dashUsed = true;
+          sprint = COMFORT.dash && trig && walking;
+          src._trigPrev = trig;
         } else if (src.handedness === "right") {
           // 向きを変える：設定で「なめらか」（倒している間ゆっくり回る。初期）か「30°ずつ」（パッと変わる。酔いにくい）
           const rx = gp.axes[2] || 0;
@@ -6159,6 +6206,7 @@ addEventListener("resize", resize);
 
 // テスト用フック
 window.__fl = {
+  TUTOR, updateTutor, tutorReset,
   LOBBY, enterLobby, leaveLobby, lobbyStart, stopKnock, CTRL_HINT, updateCtrlHint, drawHanamaru, VR_GRIPS,
   BUILD, XRSCALE, setXrScaleWant, applyXrScale, KID, friendSay, friendVoice, showEnding, climaxLines, startClimax, updateClimax, drawBoard, vrMessage,
   initAudio, audio: () => ({ AC, master, knockBus }), updatePassage, goal, setFestLen, playChime, doorBang,
