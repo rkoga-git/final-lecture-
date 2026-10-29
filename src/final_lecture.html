@@ -71,6 +71,7 @@ button:focus-visible { outline: 2px solid var(--blood); outline-offset: 2px; }
 .keys { margin-top: 14px; font-size: 12.5px; color: #4b514b; line-height: 1.7; }
 .keys kbd { font-family: var(--body); border: 1px solid #9ca39a; border-bottom-width: 2px; border-radius: 3px; padding: 0 5px; font-size: 11.5px; background: #f3eee1; }
 .note { margin-top: 10px; font-size: 12.5px; color: #8b1016; line-height: 1.6; }
+.build { margin-top: 8px; text-align: right; font-size: 11px; letter-spacing: .06em; color: #8a8f88; }   /* 版（Quest で古いページのままか確かめる用） */
 .diff { border: 0; padding: 0; margin: 0 0 16px; min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .diff legend { font-size: 12px; letter-spacing: .12em; color: #5a615a; margin-bottom: 6px; padding: 0; }
 .diff label { cursor: pointer; display: block; position: relative; }
@@ -185,6 +186,11 @@ fieldset.comfort legend { font-size: 13px; color: var(--muted); padding: 0 6px; 
   font-family: var(--display); font-weight: 600; font-size: clamp(18px, 2.4vw, 26px); letter-spacing: .14em; color: var(--ink);
   text-shadow: 0 0 12px rgba(0, 0, 0, .9), 0 0 2px rgba(0, 0, 0, .9);
 }
+/* 字幕の話し手（10/29 作者「友達が話していることをもう少し分かりやすく」）：友達は名札と暖かい色、自分のひとりごとは灰色で少し小さく */
+#caption .who { display: inline-block; margin: 0 0 6px; padding: 2px 12px 3px; border: 1px solid rgba(240, 214, 160, .7); border-radius: 3px; background: rgba(20, 16, 10, .55); font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 700; font-size: .62em; letter-spacing: .2em; color: #f0d6a0; text-shadow: none; }
+#caption .line { display: block; }
+#caption.friend .line { color: #f6dfb0; }
+#caption.self .line { color: #b8b4a9; font-weight: 500; font-size: .9em; }
 #perf { position: fixed; left: max(10px, env(safe-area-inset-left, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); z-index: 11; pointer-events: none; white-space: pre; font: 600 12px/1.6 ui-monospace, Menlo, Consolas, monospace; color: #b7f0a8; background: rgba(0, 0, 0, .6); padding: 4px 8px; border-radius: 3px; }
 #skip-hint { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); z-index: 8; font-size: 12px; letter-spacing: .12em; color: rgba(233, 228, 214, .45); pointer-events: none; }
 .ending p.cert-note { font-family: var(--display); font-size: 13.5px; letter-spacing: .1em; margin: 0 0 14px; }
@@ -359,6 +365,7 @@ fieldset.comfort legend { font-size: 13px; color: var(--muted); padding: 0 6px; 
         Quest：左スティック 移動　右スティック 向きを変える　トリガー 調べる　Y ルールと操作　X 一時停止・設定
       </div>
       <div class="note" id="vr-note" hidden></div>
+      <div class="build" id="build-tag"></div>
     </div>
   </div>
 </div>
@@ -432,17 +439,17 @@ fieldset.comfort legend { font-size: 13px; color: var(--muted); padding: 0 6px; 
 
 <div class="overlay" id="ending" hidden>
   <div class="sheet ending cert">
-    <p class="cert-note">ポケットの中に、折りたたまれた紙が一枚入っていた。</p>
-    <p class="cert-head">単位認定通知書</p>
-    <h2>最終講義</h2>
+    <p class="cert-note" id="end-note">ポケットの中に、折りたたまれた紙が一枚入っていた。</p>
+    <p class="cert-head" id="end-head">単位認定通知書</p>
+    <h2 id="end-title">最終講義</h2>
     <p class="cert-sub" id="end-sub"></p>
     <dl class="cert-grid">
-      <dt>履修区分</dt><dd id="end-diff"></dd>
-      <dt>受講時間</dt><dd id="end-time"></dd>
-      <dt>見つけた異変</dt><dd id="end-found"></dd>
-      <dt>誤った判断</dt><dd id="end-miss"></dd>
+      <dt id="end-k1">履修区分</dt><dd id="end-diff"></dd>
+      <dt id="end-k2">受講時間</dt><dd id="end-time"></dd>
+      <dt id="end-k3">見つけた異変</dt><dd id="end-found"></dd>
+      <dt id="end-k4">誤った判断</dt><dd id="end-miss"></dd>
     </dl>
-    <div class="cert-grade"><span>評価</span><b id="end-grade"></b></div>
+    <div class="cert-grade"><span id="end-k5">評価</span><b id="end-grade"></b></div>
     <p id="ending-text"></p>
     <div class="stack"><button class="primary" id="btn-again" type="button">タイトルに戻る</button><button id="btn-again2" type="button">もう一度受講する</button></div>
   </div>
@@ -450,6 +457,10 @@ fieldset.comfort legend { font-size: 13px; color: var(--muted); padding: 0 6px; 
 
 <script type="module">
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+
+// 版：Quest のブラウザが古いページを出したままのことがあるので、タイトルと VR の「はじめる前に」に小さく出す（10/29）。更新のたびに書き換える
+const BUILD = "2026-10-29b";
+document.getElementById("build-tag").textContent = "版 " + BUILD;
 
 // ============================================================================
 //  1. 間取り
@@ -1949,8 +1960,11 @@ const chalkTray = boardPart(box(0.12, 0.03, BOARD_W), PROP_MATS.chalkTray, ROOM.
 // ---- 最終講義（深夜0:00）の演出 ----
 //  教室に入ると扉が閉まり、灯りが後ろから落ち、暗がりに受講者が現れる。黒板にひとりでに文字が書かれ、
 //  「前扉から退出してください」で前扉だけが開く。最後の一行で、全員の顔がこちらを向く。前扉から出ると修了。
-const CLIMAX_LINES = ["出席を取ります", "全員　出席しています", "本日の講義は以上です", "前扉から退出してください", "振り返らないでください"];
-const CLIMAX_ENDS = CLIMAX_LINES.reduce((a, ln) => (a.push((a[a.length - 1] || 0) + [...ln].length), a), []);
+const CLIMAX_LINES_STD = ["出席を取ります", "全員　出席しています", "本日の講義は以上です", "前扉から退出してください", "振り返らないでください"];
+// こども向け（学祭の3コマ）：同じ5行・同じ意味で、ひらがなの多い言い方に（4行目で前扉の鍵が開くのも同じ）
+const CLIMAX_LINES_KID = ["しゅっせきを とります", "みんな　そろっています", "きょうの じゅぎょうは おしまいです", "まえの とびらから でてください", "うしろを ふりむかないでね"];
+const climaxLines = () => (KID.on ? CLIMAX_LINES_KID : CLIMAX_LINES_STD);
+const climaxEnds = () => climaxLines().reduce((a, ln) => (a.push((a[a.length - 1] || 0) + [...ln].length), a), []);
 const CLIMAX = { on: false, t: 0, step: 0, shown: 0, charT: 0, writing: false, exitOpen: false, turned: false, ended: false };
 function chalkFont(px, weight = 400) { return `${weight} ${px}px "Yomogi", "Zen Kaku Gothic New", sans-serif`; }
 function drawBoard() {
@@ -1967,10 +1981,10 @@ function drawBoard() {
   const chalk = blood ? "#b3121b" : "#dfe6d6";
   ctx.fillStyle = chalk; ctx.strokeStyle = chalk; ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
   if (state.final) {
-    ctx.font = chalkFont(150); ctx.fillText("最終講義", 120, 260);
-    ctx.font = chalkFont(46); ctx.fillText("0:00 〜", 132, 370);
+    if (KID.on) { ctx.font = chalkFont(112); ctx.fillText("さいごの", 120, 200); ctx.fillText("じゅぎょう", 120, 320); }
+    else { ctx.font = chalkFont(150); ctx.fillText("最終講義", 120, 260); ctx.font = chalkFont(46); ctx.fillText("0:00 〜", 132, 370); }
     let left = CLIMAX.shown;
-    CLIMAX_LINES.forEach((ln, i) => {
+    climaxLines().forEach((ln, i) => {
       if (left <= 0) return;
       const chars = [...ln];
       ctx.font = chalkFont(60); ctx.fillText(chars.slice(0, left).join(""), 960, 96 + i * 78);
@@ -1987,7 +2001,9 @@ function drawBoard() {
     ctx.save(); ctx.font = chalkFont(52); ctx.fillText(KID.on ? "もういちど" : "再受講", 118, 438); ctx.lineWidth = 4; ctx.strokeRect(104, 392, KID.on ? 290 : 186, 60); ctx.restore();
   }
   if (blood) {
-    const words = ["不可", "不可", "留年", "D", "不合格", "単位取得失敗", "不可", "再履修", "D", "留年"];
+    // こども向け（学祭の3コマ）は、成績のことばの代わりに、こどもにも分かる「ばつ」と「もどれない」（10/29 作者：ふつう版のままで落差があった）
+    const words = KID.on ? ["×", "だめ", "もどれない", "×", "ばつ", "かえれない", "×", "だめ", "もういっかい", "×"]
+                         : ["不可", "不可", "留年", "D", "不合格", "単位取得失敗", "不可", "再履修", "D", "留年"];
     for (let i = 0; i < 12; i++) {
       const wd = words[i % words.length], size = 62 + rnd() * 40, col = i % 4, row = (i / 4) | 0;
       ctx.save(); ctx.translate(800 + col * 300 + rnd() * 40, 130 + row * 120 + rnd() * 20); ctx.rotate((rnd() - 0.5) * 0.25);
@@ -4332,23 +4348,40 @@ const GRADES_FEST = [
   [3, "良", "何度か同じ講義を受け直しながらも、最後まで受講しました。"],
   [Infinity, "可", "何度も受け直しました。それでも、最後まで来ました。"]
 ];
+// こども向け（学祭の3コマ）：成績の「秀・優・良・可」の代わりに、学校の先生の判のような ◎・○
+const GRADES_KID = [
+  [0, "◎", "いちども まちがえずに、さいごまで できたね。"],
+  [1, "○", "いちど やりなおしたけど、さいごまで できたね。"],
+  [Infinity, "○", "なんども やりなおして、さいごまで がんばったね。"]
+];
+// 通知書のことば：ふつう／こども向け（10/29 作者：こども版なのに通知書と終わりの案内がふつう版のままで落差があった）
+const CERT_TEXT = {
+  std: { note: "ポケットの中に、折りたたまれた紙が一枚入っていた。", head: "単位認定通知書", title: "最終講義", keys: ["履修区分", "受講時間", "見つけた異変", "誤った判断", "評価"], vrKeys: ["受講", "所要時間", "見つけた異変", "誤り"], course: "講義名　最終講義",
+         bye: ["本日の講義は以上です。", "304大講義室には、もう戻らないでください。"] },
+  kid: { note: "ポケットの中に、おりたたまれた 紙が 入っていた。", head: "しゅうりょうしょう", title: "さいごの じゅぎょう", keys: ["コース", "かかった じかん", "見つけた へんなところ", "まちがえた かず", "ひょうか"], vrKeys: ["コース", "かかった じかん", "見つけた へんなところ", "まちがえた かず"], course: "さいごの じゅぎょう",
+         bye: ["きょうの じゅぎょうは おしまい。", "304きょうしつには、もう もどってこないでね。"] }
+};
+function certText() { return KID.on ? CERT_TEXT.kid : CERT_TEXT.std; }
 function showEnding() {
   state.mode = "ending";
   logFinish(true);
   try { document.exitPointerLock?.(); } catch (e) { /* noop */ }
   const sec = Math.round((performance.now() - state.startedAt) / 1000);
-  const what = FEST ? `学祭特別時間割（${FEST_LEN}コマ）` : goal() > 8 ? "補講を含む10コマ" : "8コマ";
-  const [, grade, comment] = (FEST ? GRADES_FEST : GRADES).find(([m]) => state.miss <= m);
+  const T = certText();
+  const what = KID.on ? "こども（3コマ）" : FEST ? `学祭特別時間割（${FEST_LEN}コマ）` : goal() > 8 ? "補講を含む10コマ" : "8コマ";
+  const [, grade, comment] = (KID.on ? GRADES_KID : FEST ? GRADES_FEST : GRADES).find(([m]) => state.miss <= m);
   const d = new Date(), no = String(Math.floor(Math.random() * 90000) + 10000);
-  $("end-sub").textContent = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日　受講者番号 ${no}`;
+  $("end-sub").textContent = KID.on ? `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日` : `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日　受講者番号 ${no}`;
+  $("end-note").textContent = T.note; $("end-head").textContent = T.head; $("end-title").textContent = T.title;
+  T.keys.forEach((k, i) => { $("end-k" + (i + 1)).textContent = k; });
   $("end-diff").textContent = FEST ? what : `${DIFFS[state.diff].name}・${what}`;
-  $("end-time").textContent = `${Math.floor(sec / 60)}分${String(sec % 60).padStart(2, "0")}秒`;
-  $("end-found").textContent = `${state.found}件`;
-  $("end-miss").textContent = `${state.miss}回`;
+  $("end-time").textContent = KID.on ? `${Math.floor(sec / 60)}ふん${String(sec % 60).padStart(2, "0")}びょう` : `${Math.floor(sec / 60)}分${String(sec % 60).padStart(2, "0")}秒`;
+  $("end-found").textContent = KID.on ? `${state.found}こ` : `${state.found}件`;
+  $("end-miss").textContent = KID.on ? `${state.miss}かい` : `${state.miss}回`;
   $("end-grade").textContent = grade;
-  $("ending-text").textContent = `${comment}\n本日の講義は以上です。304大講義室には、もう戻らないでください。`;
+  $("ending-text").textContent = `${comment}\n${T.bye.join(KID.on ? "\n" : "")}`;
   $("ending-text").style.whiteSpace = "pre-line";
-  if (renderer.xr.isPresenting) showVrCert({ sub: $("end-sub").textContent, rows: [["受講", $("end-diff").textContent], ["所要時間", $("end-time").textContent], ["見つけた異変", $("end-found").textContent], ["誤り", $("end-miss").textContent]], grade, comment });
+  if (renderer.xr.isPresenting) showVrCert({ sub: $("end-sub").textContent, rows: T.vrKeys.map((k, i) => [k, [$("end-diff"), $("end-time"), $("end-found"), $("end-miss")][i].textContent]), grade, comment });
   show("ending");
   // 学祭モード：1分で次の人のためにタイトルへ（VRではヘッドセットを渡すまで通知書を持たせておき、トリガーで1限目から）
   if (FEST) setTimeout(() => { if (state.mode === "ending" && !renderer.xr.isPresenting) goTitle(); }, 60000);
@@ -4554,11 +4587,12 @@ function updateClimax(dt) {
   });
   at(2, 5.4, () => playLecternVoice());
   at(3, 11, () => { CLIMAX.writing = true; CLIMAX.charT = 0; });
-  if (CLIMAX.writing && CLIMAX.shown < CLIMAX_ENDS[CLIMAX_ENDS.length - 1]) {
+  const ends = climaxEnds();   // こども向けの文は長さが違うので、そのつど数える
+  if (CLIMAX.writing && CLIMAX.shown < ends[ends.length - 1]) {
     CLIMAX.charT -= dt;
     if (CLIMAX.charT <= 0) {
       CLIMAX.shown++; chalkSound(); drawBoard();
-      const lineEnd = CLIMAX_ENDS.indexOf(CLIMAX.shown);
+      const lineEnd = ends.indexOf(CLIMAX.shown);
       CLIMAX.charT = lineEnd >= 0 ? 1.8 : 0.2;
       if (lineEnd === 3) {   // 「前扉から退出してください」→ 前扉の鍵が開く
         CLIMAX.exitOpen = true;
@@ -4607,11 +4641,41 @@ function updateLid(dt) {
   }
   lidMat.opacity = STORY.lid; lidMesh.visible = STORY.lid > 0.001;
 }
-function caption(text) {
+// 字幕。who："friend"（友達のセリフ：名札「友達」＋暖かい色）／"self"（自分のひとりごと：灰色）／なし（ふつう）
+function caption(text, who) {
   const el = $("caption");
-  if (renderer.xr.isPresenting) { if (text) vrMessage(text); else if (vrPanel) vrPanel.visible = false; }
+  if (renderer.xr.isPresenting) { if (text) vrMessage(text, who); else if (vrPanel) vrPanel.visible = false; }
   el.hidden = !text || renderer.xr.isPresenting;
-  if (text) el.textContent = text;
+  if (!text) return;
+  el.className = who || ""; el.textContent = "";
+  if (who === "friend") { const tag = document.createElement("span"); tag.className = "who"; tag.textContent = "友達"; el.append(tag); }
+  const line = document.createElement("span"); line.className = "line"; line.textContent = text; el.append(line);
+}
+// 友達のセリフ：字幕に名札をつけ、セリフの長さに合わせて言葉にならない話し声を右うしろから鳴らす
+function friendSay(text) { caption(text, "friend"); friendVoice(text); }
+function friendVoice(text) {
+  if (!AC || !storyBus) return;
+  const moras = [...text.replace(/[「」……、。？！\s]/g, "")].length;   // 音の数＝文字の数（ひらがな・漢字ともざっくり1つ）
+  const t0 = AC.currentTime + 0.08, dur = Math.min(2.2, 0.18 + moras * 0.11);
+  const o = AC.createOscillator(); o.type = "sawtooth";
+  const f1 = AC.createBiquadFilter(); f1.type = "bandpass"; f1.Q.value = 5;
+  const f2 = AC.createBiquadFilter(); f2.type = "bandpass"; f2.Q.value = 8;
+  const lp = AC.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 3200;   // すぐ近くの声（こもらせない）
+  const env = AC.createGain(); env.gain.value = 0.0001;
+  const out = AC.createGain(); out.gain.value = 1;
+  o.connect(f1); o.connect(f2); f1.connect(env); f2.connect(env); env.connect(lp); lp.connect(out);
+  if (AC.createStereoPanner) { const p = AC.createStereoPanner(); p.pan.value = 0.4; out.connect(p); p.connect(storyBus); } else out.connect(storyBus);   // 右うしろの席から
+  const f0 = 128, ask = /[？?]$/.test(text);
+  let t = t0;
+  for (let k = 0; k < moras && t < t0 + dur; k++) {
+    const v = VOWELS[(Math.random() * VOWELS.length) | 0], len = 0.08 + Math.random() * 0.05;
+    const last = k >= moras - 2, rise = ask && last ? 1.25 : last ? 0.88 : 1;   // 語尾：問いかけは上がり、ふつうは少し下がる
+    f1.frequency.setValueAtTime(v[0], t); f2.frequency.setValueAtTime(v[1], t);
+    o.frequency.setValueAtTime(f0 * (0.95 + Math.random() * 0.12) * rise * (k === 0 ? 1.08 : 1), t);
+    env.gain.setTargetAtTime(0.42, t, 0.012); env.gain.setTargetAtTime(0.0001, t + len * 0.85, 0.018);
+    t += len + 0.02;
+  }
+  o.start(t0); o.stop(t + 0.3);
 }
 function runStory(mode, steps, done) {
   state.mode = mode; keys.clear(); sprint = false;
@@ -4725,11 +4789,11 @@ function startIntro() {
     [0, () => { dozeLecture(at(5, 3)); if (vr) caption("トリガーで とばせます"); }],   // VR：真っ暗な間に何をすればいいか分かるように
     ...(vr ? [[at(2.0, 1.6), () => caption(null)]] : []),
     ...(f ? [] : [[5.0, () => lidTo(0.5, 0.35)], [5.6, () => lidTo(1, 0.25)]]),   // 一度うっすら目が開いて、また閉じる
-    [at(6.6, 2.4), () => caption("……寝てた？")],
+    [at(6.6, 2.4), () => caption("……寝てた？", "self")],
     [at(7.6, 2.8), () => lidTo(0, at(1.8, 1.2))],
-    [at(10.5, 5.0), () => caption("……誰も、いない")],
+    [at(10.5, 5.0), () => caption("……誰も、いない", "self")],
     [at(13.0, 6.2), () => { caption(null); lapChimeDone = true; playChime(false); }],
-    ...(f ? [] : [[15.6, () => { caption("机の上に、プリントがある"); STORY.pitchTarget = -0.62; }], [18.2, () => { caption(null); STORY.pitchTarget = -0.1; }]]),
+    ...(f ? [] : [[15.6, () => { caption("机の上に、プリントがある", "self"); STORY.pitchTarget = -0.62; }], [18.2, () => { caption(null); STORY.pitchTarget = -0.1; }]]),
     [at(18.6, 7.8), () => lidTo(1, 0.3)],
     [at(19.2, 8.3), () => { standUp(); lidTo(0, 0.5); }],
     [at(19.9, 9.0), () => {}]
@@ -4766,14 +4830,14 @@ function startEpilogue() {
   runStory("epilogue", [
     [1.9, () => { wakeInCampus(); lidTint(0xf1eee6, 0x000000, 1.4); }],
     [2.4, () => campusBustle()],
-    [3.4, () => { shakeShoulder(); caption("「……おい、起きろって」"); }],
+    [3.4, () => { shakeShoulder(); friendSay("「……おい、起きろって」"); }],
     [4.9, () => lidTo(0.45, 0.4)],
     [5.4, () => lidTo(1, 0.3)],
-    [5.9, () => { shakeShoulder(0.5); caption("「授業、もう終わったぞ」"); }],
+    [5.9, () => { shakeShoulder(0.5); friendSay("「授業、もう終わったぞ」"); }],
     [6.6, () => lidTo(0, 1.4)],
-    [8.8, () => { caption("「先に学食行ってるからな」"); friendLeaves(); }],
-    [11.6, () => caption("……夢、だった？")],
-    [14.2, () => caption("……ポケットに、何か入っている")],
+    [8.8, () => { friendSay("「先に学食行ってるからな」"); setTimeout(friendLeaves, 1500); }],   // 言い終わってから歩き出す
+    [11.6, () => caption("……夢、だった？", "self")],
+    [14.2, () => caption("……ポケットに、何か入っている", "self")],
     [16.8, () => {}]
   ], endEpilogue);
 }
@@ -4829,10 +4893,11 @@ function drawVrCert(info) {
   ctx.fillStyle = fold; ctx.fillRect(0, h / 2 - 30, w, 60);
   ctx.strokeStyle = "rgba(60,50,40,.25)"; ctx.lineWidth = 3; ctx.strokeRect(28, 28, w - 56, h - 56);
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillStyle = "#6a655b"; ctx.font = `500 26px ${G}`; ctx.fillText("ポケットの中に、折りたたまれた紙が一枚入っていた。", w / 2, 78);
-  ctx.fillStyle = "#1d1f1c"; ctx.font = `800 60px ${M}`; ctx.fillText("単位認定通知書", w / 2, 170);
+  const T = certText();
+  ctx.fillStyle = "#6a655b"; ctx.font = `500 26px ${G}`; ctx.fillText(T.note, w / 2, 78);
+  ctx.fillStyle = "#1d1f1c"; ctx.font = `800 60px ${M}`; ctx.fillText(T.head, w / 2, 170);
   ctx.fillStyle = "#555"; ctx.font = `500 24px ${G}`; ctx.fillText(info.sub, w / 2, 228);
-  ctx.fillStyle = "#1d1f1c"; ctx.font = `700 36px ${M}`; ctx.fillText("講義名　最終講義", w / 2, 296);
+  ctx.fillStyle = "#1d1f1c"; ctx.font = `700 36px ${M}`; ctx.fillText(T.course, w / 2, 296);
   ctx.strokeStyle = "rgba(40,40,36,.35)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(80, 340); ctx.lineTo(w - 80, 340); ctx.moveTo(80, 590); ctx.lineTo(w - 80, 590); ctx.stroke();
   info.rows.forEach(([k, v], i) => {
     const y = 382 + i * 56;
@@ -4840,12 +4905,12 @@ function drawVrCert(info) {
     ctx.textAlign = "right"; ctx.fillStyle = "#1d1f1c"; ctx.font = `700 30px ${G}`; ctx.fillText(v, w - 96, y);
   });
   ctx.textAlign = "center";
-  ctx.fillStyle = "#6a655b"; ctx.font = `500 30px ${G}`; ctx.fillText("評価", w / 2 - 120, 680);
+  ctx.fillStyle = "#6a655b"; ctx.font = `500 30px ${G}`; ctx.fillText(T.keys[4], w / 2 - 120, 680);
   ctx.save(); ctx.translate(w / 2 + 40, 680); ctx.rotate(-0.14);
   ctx.strokeStyle = "#a3121a"; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0, 0, 62, 0, Math.PI * 2); ctx.stroke();
   ctx.fillStyle = "#a3121a"; ctx.font = `800 76px ${M}`; ctx.fillText(info.grade, 0, 4); ctx.restore();
   ctx.fillStyle = "#333"; ctx.font = `500 27px ${G}`;
-  const lines = [info.comment, "本日の講義は以上です。", "304大講義室には、もう戻らないでください。"];
+  const lines = [info.comment, ...T.bye];
   lines.forEach((ln, i) => ctx.fillText(ln, w / 2, 800 + i * 44));
   ctx.fillStyle = "#8a8579"; ctx.font = `500 22px ${G}`; ctx.fillText("トリガー：はじめる前の設定へ（次の人へ）", w / 2, h - 62);
   CERT.tex.needsUpdate = true;
@@ -5072,7 +5137,8 @@ function vrMenuItems() {
     ["VRを終了する", () => { closeVrMenu(); renderer.xr.getSession()?.end(); }],
     [`（スタッフ）お助け掲示板：${helpOn() ? "オン" : "オフ"}`, () => { setHelp(!helpOn()); drawVrMenu(); }],
     [`（スタッフ）画質：${HQ.on ? "高画質" : "以前の見た目"}`, () => { setHQ(!HQ.on); drawVrMenu(); }],
-    [`（スタッフ）重さの表示：${PERF.on ? "オン" : "オフ"}`, () => { setPerf(!PERF.on); drawVrMenu(); }]
+    [`（スタッフ）重さの表示：${PERF.on ? "オン" : "オフ"}`, () => { setPerf(!PERF.on); drawVrMenu(); }],
+    [`（スタッフ）VRの細かさ：${XRSCALE.want > 1 ? "くっきり" : "ふつう"}${XRSCALE.want !== XRSCALE.cur ? "（次のVRから）" : ""}`, () => { setXrScaleWant(XRSCALE.want > 1 ? 1 : XRSCALE_HI); drawVrMenu(); }]
   ];
 }
 function drawVrMenu() {
@@ -5095,6 +5161,7 @@ function drawVrMenu() {
   });
   ctx.fillStyle = "#9aa097"; ctx.font = `500 26px ${G}`;
   ctx.fillText(setup ? "スティックで選ぶ　トリガーで決める（あとで X／A でも変更可）" : "左スティックの上下で選ぶ　トリガーで決める　X／A で閉じる", w / 2, h - 34);
+  ctx.fillStyle = "#6c726b"; ctx.font = `500 18px ${G}`; ctx.textAlign = "right"; ctx.fillText("版 " + BUILD, w - 18, 22); ctx.textAlign = "center";   // 古いページのままか確かめる用
   VRMENU.tex.needsUpdate = true;
 }
 function openVrMenu(kind = "pause") {
@@ -5285,16 +5352,25 @@ setInterval(() => { if (DEBUG.open) debugStatus(); }, 250);
 // ---- VR ----
 const vrNote = $("vr-note");
 let vrPanel = null;
-function vrMessage(text) {
+function vrMessage(text, who) {
   if (!vrPanel) {
     const t = canvasTex(1024, 256, () => {}, { clampS: true, clampT: true });
     vrPanel = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.3), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthTest: false, fog: false }));
     vrPanel.renderOrder = 30; vrPanel.position.set(0, 0, -1.4); camera.add(vrPanel);   // まぶた（暗転の板）より手前に出す
   }
-  const ctx = vrPanel.material.map.userData.ctx;
+  const ctx = vrPanel.material.map.userData.ctx, G = '"Zen Kaku Gothic New", sans-serif';
   ctx.clearRect(0, 0, 1024, 256); ctx.fillStyle = "rgba(8,10,10,.82)"; ctx.fillRect(0, 0, 1024, 256);
-  ctx.fillStyle = "#e9e4d6"; ctx.font = '800 64px "Shippori Mincho B1", serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  text.split("\n").forEach((line, i, arr) => ctx.fillText(line, 512, 128 + (i - (arr.length - 1) / 2) * 80));
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  let cy = 128;
+  if (who === "friend") {   // 友達のセリフ：上に「友達」の名札、文字は暖かい色
+    ctx.strokeStyle = "rgba(240,214,160,.75)"; ctx.lineWidth = 3; ctx.fillStyle = "rgba(20,16,10,.7)";
+    ctx.fillRect(432, 22, 160, 50); ctx.strokeRect(432, 22, 160, 50);
+    ctx.fillStyle = "#f0d6a0"; ctx.font = `700 32px ${G}`; ctx.fillText("友　達", 512, 48);
+    cy = 160;
+  }
+  ctx.fillStyle = who === "friend" ? "#f6dfb0" : who === "self" ? "#b8b4a9" : "#e9e4d6";
+  ctx.font = `${who === "self" ? 600 : 800} ${who === "self" ? 58 : 64}px "Shippori Mincho B1", serif`;
+  text.split("\n").forEach((line, i, arr) => ctx.fillText(line, 512, cy + (i - (arr.length - 1) / 2) * 80));
   vrPanel.material.map.needsUpdate = true; vrPanel.visible = true;
 }
 $("btn-vr").addEventListener("click", async () => {
@@ -5305,7 +5381,7 @@ $("btn-vr").addEventListener("click", async () => {
     const ok = await navigator.xr.isSessionSupported("immersive-vr");
     if (!ok) { fail("この端末ではVRを開始できません。Quest 3 のブラウザで単体版のページを開いてください。"); return; }
     const session = await navigator.xr.requestSession("immersive-vr", { optionalFeatures: ["local-floor", "bounded-floor"] });
-    state.diff = readDiff(); resetRun(); await renderer.xr.setSession(session);
+    state.diff = readDiff(); resetRun(); applyXrScale(); await renderer.xr.setSession(session);
     session.addEventListener("select", () => {
       if (state.mode === "intro" || state.mode === "epilogue") { skipStory(); return; }
       if (state.mode === "ending") { if (performance.now() - CERT.shownAt > 2500) vrNextPlayer(); return; }   // クリア後は次の人の設定画面へ
@@ -5819,7 +5895,24 @@ function checkQuality(fps) {
   // 描くべき回数の 92% を下回る状態が続いたら（90Hz なら 83fps 未満、72Hz なら 66fps 未満）。
   //  以前は 72Hz を前提に「62fps 未満」だったので、90Hz で 80〜85fps に落ちても働かなかった
   QUALITY.low = fps < xrTargetFps() * 0.92 ? QUALITY.low + 1 : 0;
-  if (QUALITY.low >= 6 && QUALITY.level < 2) setQuality(QUALITY.level + 1);   // 0.5秒ごとに数えるので 6回＝3秒
+  if (QUALITY.low >= 6 && QUALITY.level < 2) {   // 0.5秒ごとに数えるので 6回＝3秒
+    setQuality(QUALITY.level + 1);
+    // VRの細かさは VR の途中では変えられないので、くっきり（1.2倍）で重かったら、次のVRからふつう（1.0倍）にする
+    if (XRSCALE.cur > 1 && XRSCALE.want > 1) { setXrScaleWant(1); XRSCALE.autoDown = true; }
+  }
+}
+// ---- VRの描く細かさ（10/29 作者「VRにもう少し余裕がある」→ 文字と輪郭をくっきり）----
+//  Quest は 90fps がほぼ出ていたので、片目の絵を縦横 1.2 倍の細かさで描いて縮めて見せる（黒板・掲示・通知書の文字が読みやすくなる）。
+//  VRを始める前にしか変えられない。重さの自動調整が働いたら次のVRから 1.0 倍に戻し、その端末に覚えておく（スタッフ用の VR メニューで戻せる）
+const XRSCALE_HI = 1.2;
+const XRSCALE = { want: XRSCALE_HI, cur: 1, autoDown: false };
+try { const v = parseFloat(localStorage.getItem("final-lecture-xrscale-v1")); if (v === 1 || v === XRSCALE_HI) XRSCALE.want = v; } catch (e) { /* 既定はくっきり */ }
+function setXrScaleWant(v) {
+  XRSCALE.want = v; XRSCALE.autoDown = false;
+  try { localStorage.setItem("final-lecture-xrscale-v1", String(v)); } catch (e) { /* 今回だけ */ }
+}
+function applyXrScale() {   // VR を始める直前（setSession の前）に呼ぶ
+  try { renderer.xr.setFramebufferScaleFactor(XRSCALE.want); XRSCALE.cur = XRSCALE.want; } catch (e) { XRSCALE.cur = 1; }
 }
 const clockT = new THREE.Clock();
 // ---- 重さの表示（デバッグ用）：1秒あたりの描画回数・1フレームの時間・いちばん遅かったフレーム・描画の命令数 ----
@@ -5838,7 +5931,7 @@ function perfFrame(cpuMs) {
   if (PERF.acc < 500) return;
   const fps = PERF.frames * 1000 / PERF.acc;
   checkQuality(fps);
-  PERF.text = `${fps.toFixed(0)} fps　${(PERF.acc / PERF.frames).toFixed(1)}ms（最悪 ${PERF.worst.toFixed(0)}ms）\n処理 ${(PERF.cpu / PERF.frames).toFixed(1)}ms　描画命令 ${PERF.calls}　三角形 ${(PERF.tris / 1000).toFixed(0)}k\n画質 ${QUALITY_NAMES[QUALITY.level]}${renderer.xr.isPresenting ? `　目標 ${Math.round(xrTargetFps())}fps` : ""}`;
+  PERF.text = `${fps.toFixed(0)} fps　${(PERF.acc / PERF.frames).toFixed(1)}ms（最悪 ${PERF.worst.toFixed(0)}ms）\n処理 ${(PERF.cpu / PERF.frames).toFixed(1)}ms　描画命令 ${PERF.calls}　三角形 ${(PERF.tris / 1000).toFixed(0)}k\n画質 ${QUALITY_NAMES[QUALITY.level]}${renderer.xr.isPresenting ? `　目標 ${Math.round(xrTargetFps())}fps　細かさ ${XRSCALE.cur}倍` : ""}`;
   PERF.frames = 0; PERF.acc = 0; PERF.worst = 0; PERF.cpu = 0;
   if (!PERF.on) return;
   if (renderer.xr.isPresenting) {
@@ -5874,6 +5967,7 @@ addEventListener("resize", resize);
 
 // テスト用フック
 window.__fl = {
+  BUILD, XRSCALE, setXrScaleWant, applyXrScale, KID, friendSay, friendVoice, showEnding, climaxLines, startClimax, updateClimax, drawBoard, vrMessage,
   initAudio, audio: () => ({ AC, master, knockBus }), updatePassage, goal, setFestLen, playChime, doorBang,
   state, judge, prepareLecture, applyAnomaly, pointFloor, walkable, pickAnomaly, ANOMALIES, camera,
   get rig() { return rig.position; },
