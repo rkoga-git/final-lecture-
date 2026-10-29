@@ -1978,9 +1978,11 @@ function drawBoard() {
     });
     return;
   }
-  const P = state.epilogue ? { ...PERIODS[4], idx: 4 } : lecturePeriod(state.lecture);   // 終わりの場面：元の大学のふつうの4限
+  // 終わりの場面（元の大学）：以前は「4限目」と書いていたが、学祭の3コマ・5コマでは「4回目の講義に飛んだ」ように見えた（10/29 作者）。
+  //  友達の「授業、もう終わったぞ」に合わせて「講義終了」（こども向けは「おわり」）にする
+  const P = state.epilogue ? { label: KID.on ? "おわり" : "講義終了", time: KID.on ? "おつかれさま" : "本日の講義は終了しました", idx: 4 } : lecturePeriod(state.lecture);
   ctx.font = chalkFont(P.label.length > 4 ? 112 : 170); ctx.fillText(P.label, 100, 280);
-  ctx.font = chalkFont(46); ctx.fillText(P.time + " 〜", 112, 370);
+  ctx.font = chalkFont(46); ctx.fillText(state.epilogue ? P.time : P.time + " 〜", 112, 370);
   if (state.retake && !state.epilogue && !blood) {   // 判断を誤った直後：やり直しになったことをはっきり見せる（何を見逃したかは言わない）
     ctx.save(); ctx.font = chalkFont(52); ctx.fillText(KID.on ? "もういちど" : "再受講", 118, 438); ctx.lineWidth = 4; ctx.strokeRect(104, 392, KID.on ? 290 : 186, 60); ctx.restore();
   }
@@ -2039,7 +2041,8 @@ function drawBoard() {
     ctx.font = chalkFont(40); ctx.fillText("まる", 895, 350); ctx.fillText("さんかく", 1062, 350); ctx.fillText("しかく", 1295, 350);
     ctx.font = chalkFont(56); ctx.fillText("1 + 2 + 3 = 6", 1500, 250);
     ctx.font = chalkFont(34);
-    if (state.lecture === 1 && !state.epilogue) ctx.fillText("※ きょうは ふつうの日。教室と ろうかを よく見ておこう", 820, 440);
+    if (state.epilogue) { /* 終わりの場面：遊び方の注意書きは書かない */ }
+    else if (state.lecture === 1) ctx.fillText("※ きょうは ふつうの日。教室と ろうかを よく見ておこう", 820, 440);
     else ctx.fillText("※ へんなところが あったら もどろう", 820, 440);
     return;
   }
@@ -2051,7 +2054,7 @@ function drawBoard() {
   for (const [px, py] of [[1660, 280], [1790, 320], [1700, 340]]) { ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.fill(); }
   ctx.beginPath(); ctx.moveTo(1880, 300); ctx.lineTo(1866, 286); ctx.moveTo(1880, 300); ctx.lineTo(1894, 286); ctx.stroke();
   ctx.font = chalkFont(34);
-  if (!HINT.on) ctx.fillText("※ 出席は扉で確認します", 820, 440);   // ふだん：遊び方の注意書きは書かない（雰囲気を優先）
+  if (!HINT.on || state.epilogue) ctx.fillText("※ 出席は扉で確認します", 820, 440);   // ふだん：遊び方の注意書きは書かない（雰囲気を優先）
   else if (state.lecture === 1 && !state.epilogue) ctx.fillText("※ 本日は通常どおり。教室と廊下をよく見ておくこと", 820, 440);   // 学祭：1限目は下見（異変は出ない）
   else ctx.fillText("※ 異変に気づいたら「引き返す」の扉から戻ること", 820, 440);
 }
@@ -2067,9 +2070,10 @@ function drawTimetable() {
   ctx.font = `700 40px ${G}`; ctx.fillText("本日の時間割", w / 2, 36);
   ctx.font = `500 21px ${G}`; ctx.fillText("304大講義室　解析学特論", w / 2, 72);
   const n = goal(), top = 112, bottom = h - 74, rh = Math.min(64, (bottom - top) / n);
-  const done = state.final ? n : Math.max(0, state.lecture - 1);
+  const fin = state.final || state.epilogue;   // 最終講義・終わりの場面では、全部のコマに判
+  const done = fin ? n : Math.max(0, state.lecture - 1);
   for (let i = 1; i <= n; i++) {
-    const P = lecturePeriod(i), y = top + (i - 1) * rh, cur = !state.final && i === state.lecture;
+    const P = lecturePeriod(i), y = top + (i - 1) * rh, cur = !fin && i === state.lecture;
     if (cur) { ctx.fillStyle = "#ffe9a8"; ctx.fillRect(10, y + 2, w - 20, rh - 4); }
     ctx.fillStyle = "#1d1f1c"; ctx.textAlign = "left";
     ctx.font = `700 ${Math.round(rh * 0.5)}px ${G}`; ctx.fillText(P.label, 30, y + rh / 2);
@@ -4430,12 +4434,27 @@ function passageEvent() {
   PASS.uses++;
   const p = FEST ? (PASS.festDone ? 0 : 1) : (state.lecture >= 3 && PASS.uses - PASS.lastUse >= 2 ? 0.4 : 0);   // 学祭モードは最初に通ったとき必ず
   if (DEBUG.passage) { PASS.kind = DEBUG.passage; } else if (Math.random() >= p) return;
+  else if (FEST) PASS.kind = "knock";   // 学祭：1回きりなので、いちばん分かりやすい「扉を叩かれる」にする（10/29）
   else PASS.kind = PASS.lastKind === "knock" ? "dark" : PASS.lastKind === "dark" ? "knock" : (Math.random() < 0.5 ? "knock" : "dark");
   PASS.t = 0; PASS.step = 0; PASS.lastUse = PASS.uses; PASS.lastKind = PASS.kind; if (FEST) PASS.festDone = true;
 }
 // 扉を叩く音（k は強さ）。低い胴鳴り＋中くらいの「ドン」＋高い「コン」
+// 鉄の扉の響き：音程のある成分（サイン波）を数本、0.3〜0.7秒かけて減衰させる。
+//  10/29：雑音だけの「ドン」は一瞬で消えるので、Quest のスピーカーでは数字の大きさほど聞こえなかった（チャイムは音程があって長く鳴るのでよく聞こえる）。
+//  チャイムと同じ 250〜1500Hz あたりに、長めに鳴る成分を足す
+const DOOR_PARTIALS = [[196, 0.30, 0.55], [331, 0.34, 0.6], [512, 0.30, 0.5], [747, 0.20, 0.4], [1093, 0.12, 0.3], [1480, 0.07, 0.22]];   // [Hz, 強さ, 減衰（秒）]
+function doorRing(delay, k) {
+  if (!AC || !knockBus) return;
+  const t0 = AC.currentTime + delay, det = 0.97 + Math.random() * 0.06;
+  for (const [f, a, d] of DOOR_PARTIALS) {
+    const o = AC.createOscillator(); o.type = "sine"; o.frequency.value = f * det;
+    const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(a * k * 0.55, t0 + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d * (0.8 + 0.4 * k));
+    o.connect(g); g.connect(knockBus); o.start(t0); o.stop(t0 + d * 1.4 + 0.1);
+  }
+}
 function doorBang(delay, k) {
   const B = knockBus;
+  doorRing(delay, k);
   noiseHit(110, 0.9, 0.9 * k, 0.35, delay, B); noiseHit(240, 1.1, 0.95 * k, 0.2, delay, B); noiseHit(520, 1.6, 0.6 * k, 0.1, delay, B);
   noiseHit(1500, 2.5, 0.22 * k, 0.05, delay, B); noiseHit(330, 3, 0.25 * k, 0.45, delay + 0.02, B);   // 扉の板の響き
   noiseHit(800, 1.4, 0.35 * k, 0.12, delay, B);   // Quest のスピーカーでも聞こえやすい中くらいの「ドン」
@@ -5855,7 +5874,7 @@ addEventListener("resize", resize);
 
 // テスト用フック
 window.__fl = {
-  initAudio, audio: () => ({ AC, master, knockBus }), updatePassage, goal, setFestLen,
+  initAudio, audio: () => ({ AC, master, knockBus }), updatePassage, goal, setFestLen, playChime, doorBang,
   state, judge, prepareLecture, applyAnomaly, pointFloor, walkable, pickAnomaly, ANOMALIES, camera,
   get rig() { return rig.position; },
   setPose(x, z, ry, p = 0) { curFloor = pointFloor(x, z); rig.position.set(x, curFloor, z); yaw = ry; pitch = p; update(0); },
