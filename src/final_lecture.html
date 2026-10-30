@@ -141,6 +141,9 @@ fieldset.comfort legend { font-size: 13px; color: var(--muted); padding: 0 6px; 
 #title fieldset.comfort { border-color: rgba(40,36,28,.25); }
 #title fieldset.comfort legend, #title fieldset.comfort .row { color: #3a372f; }
 #title details.staff { color: #5a5548; }
+/* 10/30：「酔い対策・操作」もたたんで見せる（押すと開く）。タイトルと一時停止で同じ部品を移して使う */
+details.comfortd { margin: 6px 0 2px; }
+#title details.comfortd .row { color: #3a372f; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--muted); padding: 4px 2px; }
 .row input[type=range] { width: 52%; accent-color: var(--accent); }
 .row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
@@ -390,15 +393,15 @@ fieldset.comfort legend { font-size: 13px; color: var(--muted); padding: 0 6px; 
       <button id="btn-totitle" type="button">タイトルへ戻る</button>
       <div class="slot-comfort" id="slot-comfort-pause">
         <!-- 酔い対策・操作：遊ぶ人が自分で決める設定。タイトルと一時停止の両方に出す（同じ部品を移して使う） -->
-        <fieldset class="comfort" id="comfort-box">
-          <legend>酔い対策・操作</legend>
+        <details class="staff comfortd" id="comfort-box">
+          <summary>設定（酔い対策・操作）</summary>
           <div class="row"><label for="sens">マウス感度（PC）</label><input id="sens" type="range" min="0.4" max="2.5" step="0.05" value="1"></div>
           <div class="row"><label for="chk-dash">ダッシュを使う</label><input id="chk-dash" type="checkbox" checked></div>
           <div class="row"><label for="chk-vignette">酔い止めの縁取り（VR）</label><input id="chk-vignette" type="checkbox"></div>
           <div class="row"><label for="chk-snap">向きを30°ずつ変える（VR）</label><input id="chk-snap" type="checkbox"></div>
           <div class="row"><label for="chk-slow">ゆっくり歩く</label><input id="chk-slow" type="checkbox"></div>
           <div class="row"><label for="chk-ring">足もとの輪（VR）</label><input id="chk-ring" type="checkbox" checked></div>
-        </fieldset>
+        </details>
       </div>
       <details class="staff">
         <summary>スタッフ用の設定</summary>
@@ -471,7 +474,7 @@ fieldset.comfort legend { font-size: 13px; color: var(--muted); padding: 0 6px; 
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 
 // 版：Quest のブラウザが古いページを出したままのことがあるので、タイトルと VR の「はじめる前に」に小さく出す（10/29）。更新のたびに書き換える
-const BUILD = "2026-10-30a";
+const BUILD = "2026-10-30b";
 document.getElementById("build-tag").textContent = "版 " + BUILD;
 
 // ============================================================================
@@ -5298,65 +5301,102 @@ const vignetteItem = () => [`酔い止めの縁取り：${COMFORT.vignette ? "�
 const dashItem = () => [`ダッシュ：${COMFORT.dash ? "オン" : "オフ"}`, () => { COMFORT.dash = !COMFORT.dash; saveComfort(); drawVrMenu(); }];
 const slowItem = () => [`歩く速さ：${COMFORT.slow ? "ゆっくり" : "ふつう"}`, () => { COMFORT.slow = !COMFORT.slow; saveComfort(); drawVrMenu(); }];
 const ringItem = () => [`足もとの輪：${COMFORT.ring ? "オン" : "オフ"}`, () => { COMFORT.ring = !COMFORT.ring; saveComfort(); drawVrMenu(); }];
-// 「酔ってきた」（10/30 作者が選択）：一時停止メニューのいちばん上。押すと酔いにくい設定（30°ずつ・縁取り・走らない・ゆっくり・足もとの輪）を
+// 「酔ってきた」（10/30 作者が選択）：一時停止メニューの2番目（いちばん上は「再開する」）。押すと酔いにくい設定（30°ずつ・縁取り・走らない・ゆっくり・足もとの輪）を
 //  まとめて入れ、メニューを閉じて「少し休んでいい」と知らせる
 function feelingSick() {
   Object.assign(COMFORT, COMFORT_SICK); saveComfort(); closeVrMenu();
   vrMessage("酔いにくい設定にしました\n気分が悪いときは、無理せず外して休んでください");
   setTimeout(() => { if (vrPanel && state.mode === "play") vrPanel.visible = false; }, 5000);
 }
+// VR のメニュー（10/30 作者「選ばないといけない項目が多すぎる。ルールも読まない人がほとんどなので、たくさんの設定は読まれない」→ 整理）
+//  ページ（VRMENU.kind）：
+//   "setup"     はじめる前に：大きなボタン2つ（講義室に入る／酔いやすい人はこちら）＋小さな「その他の設定…」。コース・区分は上に表示だけ
+//   "setupmore" その他の設定（はじめる前）：コース／区分・お助け掲示板・向き・縁取り・走る・歩く速さ・足もとの輪・もどる
+//   "pause"     一時停止：再開する／酔ってきた／1限目からやり直す／その他の設定…（ルールは Y ボタン）
+//   "pausemore" その他の設定（遊んでいる途中）：ルールと操作・向き・縁取り・走る・歩く速さ・足もとの輪・スタッフ用…・もどる
+//   "staff"     スタッフ用：お助け掲示板・画質・重さの表示・VRの細かさ・VRを終了する・もどる
+//  項目は [文字, する事, 形]。形："big"（大きいボタン。2行目は sub）／"small"（小さい文字だけ）／なし（ふつう）
+const VR_PAUSE_KINDS = ["pause", "pausemore", "staff"];
+function vrMenuGo(kind, sel = 0) { VRMENU.kind = kind; VRMENU.sel = sel; drawVrMenu(); }
+function courseLabel() { return FEST ? `コース：${FEST_LEN === 3 ? "こども（3コマ）" : "ふつう（5コマ）"}` : `履修区分：${DIFFS[readDiff()].name}`; }
+function courseItem() {
+  const DIFF_ORDER = ["easy", "normal", "hard"], d = readDiff();
+  return FEST
+    ? [courseLabel(), () => { setFestLen(FEST_LEN === 3 ? 5 : 3); drawVrMenu(); }]   // 学祭：遊ぶ人に合わせて部員が選ぶ
+    : [courseLabel(), () => { const nx = DIFF_ORDER[(DIFF_ORDER.indexOf(d) + 1) % 3]; const r = document.querySelector(`input[name="diff"][value="${nx}"]`); if (r) { r.checked = true; r.dispatchEvent(new Event("change")); } state.diff = nx; drawVrMenu(); }];
+}
 function vrMenuItems() {
-  if (VRMENU.kind === "setup") {
-    // VR の入口（ロビー）の「はじめる前に」：コース（学祭）／履修区分（ふだん）→ 酔い対策のおすすめ2つ → 細かい設定 → 講義室に入る
-    const preset = (label, p) => [`${comfortIs(p) ? "●" : "○"} ${label}`, () => { Object.assign(COMFORT, p); saveComfort(); drawVrMenu(); }];
-    const DIFF_ORDER = ["easy", "normal", "hard"], d = readDiff();
-    const first = FEST
-      ? [`コース：${FEST_LEN === 3 ? "こども（3コマ）" : "ふつう（5コマ）"}`, () => { setFestLen(FEST_LEN === 3 ? 5 : 3); drawVrMenu(); }]   // 学祭：遊ぶ人に合わせて部員が選ぶ
-      : [`履修区分：${DIFFS[d].name}`, () => { const nx = DIFF_ORDER[(DIFF_ORDER.indexOf(d) + 1) % 3]; const r = document.querySelector(`input[name="diff"][value="${nx}"]`); if (r) { r.checked = true; r.dispatchEvent(new Event("change")); } state.diff = nx; drawVrMenu(); }];
-    return [
-      first,
-      preset("VRに慣れている人向け", COMFORT_DEFAULT),
-      preset("酔いやすい人向け", COMFORT_SICK),
-      turnItem(), vignetteItem(), dashItem(), slowItem(), ringItem(),
-      [`お助け掲示板：${helpOn() ? "オン" : "オフ"}`, () => { setHelp(!helpOn()); drawVrMenu(); }],
-      ["講義室に入る", () => lobbyStart()]
-    ];
-  }
-  return [
-    // 遊ぶ人向け（再開・ルール・酔い対策・やり直し・終了）→ 最後にスタッフ向け
-    ["酔ってきた（酔いにくい設定にする）", () => feelingSick()],
-    ["再開する", () => closeVrMenu()],
+  const k = VRMENU.kind;
+  if (k === "setup") return [
+    ["講義室に入る", () => lobbyStart(), "big"],
+    ["酔いやすい人はこちら", () => { Object.assign(COMFORT, COMFORT_SICK); saveComfort(); lobbyStart(); }, "big", "ゆっくり歩く・30°ずつ向きを変える・走らない"],
+    ["その他の設定…", () => vrMenuGo("setupmore"), "small"]
+  ];
+  if (k === "setupmore") return [
+    courseItem(),
+    [`お助け掲示板：${helpOn() ? "オン" : "オフ"}`, () => { setHelp(!helpOn()); drawVrMenu(); }],
+    turnItem(), vignetteItem(), dashItem(), slowItem(), ringItem(),
+    ["もどる", () => vrMenuGo("setup", 2), "small"]
+  ];
+  if (k === "pausemore") return [
     ["ルールと操作を見る", () => { closeVrMenu(); openGuide(false); }],
-    turnItem(), vignetteItem(), dashItem(), slowItem(),
-    ["1限目からやり直す", () => { closeVrMenu(); resetRun(); startIntro(); }],
+    turnItem(), vignetteItem(), dashItem(), slowItem(), ringItem(),
+    ["スタッフ用…", () => vrMenuGo("staff"), "small"],
+    ["もどる", () => vrMenuGo("pause", 3), "small"]
+  ];
+  if (k === "staff") return [
+    [`お助け掲示板：${helpOn() ? "オン" : "オフ"}`, () => { setHelp(!helpOn()); drawVrMenu(); }],
+    [`画質：${HQ.on ? "高画質" : "以前の見た目"}`, () => { setHQ(!HQ.on); drawVrMenu(); }],
+    [`重さの表示：${PERF.on ? "オン" : "オフ"}`, () => { setPerf(!PERF.on); drawVrMenu(); }],
+    [`VRの細かさ：${XRSCALE.want > 1 ? "くっきり（重い）" : "ふつう"}${XRSCALE.want !== XRSCALE.cur ? "（次のVRから）" : ""}`, () => { setXrScaleWant(XRSCALE.want > 1 ? 1 : XRSCALE_HI); drawVrMenu(); }],
     ["VRを終了する", () => { closeVrMenu(); renderer.xr.getSession()?.end(); }],
-    [`（スタッフ）お助け掲示板：${helpOn() ? "オン" : "オフ"}`, () => { setHelp(!helpOn()); drawVrMenu(); }],
-    [`（スタッフ）画質：${HQ.on ? "高画質" : "以前の見た目"}`, () => { setHQ(!HQ.on); drawVrMenu(); }],
-    [`（スタッフ）重さの表示：${PERF.on ? "オン" : "オフ"}`, () => { setPerf(!PERF.on); drawVrMenu(); }],
-    [`（スタッフ）VRの細かさ：${XRSCALE.want > 1 ? "くっきり（重い）" : "ふつう"}${XRSCALE.want !== XRSCALE.cur ? "（次のVRから）" : ""}`, () => { setXrScaleWant(XRSCALE.want > 1 ? 1 : XRSCALE_HI); drawVrMenu(); }]
+    ["もどる", () => vrMenuGo("pausemore", 6), "small"]
+  ];
+  return [   // "pause"
+    ["再開する", () => closeVrMenu(), "big"],
+    ["酔ってきた（酔いにくくする）", () => feelingSick()],
+    ["1限目からやり直す", () => { closeVrMenu(); resetRun(); startIntro(); }],
+    ["その他の設定…", () => vrMenuGo("pausemore"), "small"]
   ];
 }
+const VRMENU_TITLES = { setup: "はじめる前に", setupmore: "その他の設定", pause: "一時停止", pausemore: "その他の設定", staff: "スタッフ用" };
 function drawVrMenu() {
-  const ctx = VRMENU.tex.userData.ctx, w = 1024, h = 960, items = vrMenuItems(), G = '"Zen Kaku Gothic New", sans-serif';   // 10/30：項目が増えたので 768→960
+  const ctx = VRMENU.tex.userData.ctx, w = 1024, h = 960, items = vrMenuItems(), G = '"Zen Kaku Gothic New", sans-serif', k = VRMENU.kind;
   ctx.clearRect(0, 0, w, h); ctx.fillStyle = "rgba(16,20,19,.94)"; ctx.fillRect(0, 0, w, h);
   ctx.strokeStyle = "#2a312d"; ctx.lineWidth = 4; ctx.strokeRect(2, 2, w - 4, h - 4);
-  ctx.fillStyle = "#e9e4d6"; ctx.font = '800 58px "Shippori Mincho B1", serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  const setup = VRMENU.kind === "setup";
-  ctx.fillText(setup ? "はじめる前に" : "一時停止", w / 2, setup ? 64 : 78);
-  if (setup) {
-    ctx.fillStyle = "#9aa097"; ctx.font = `500 25px ${G}`;
-    ctx.fillText(`${FEST ? "コース" : "履修区分"}を選んで、酔い対策のおすすめ（●○）から1つ選んでください`, w / 2, 112);
-    ctx.fillText("お助け掲示板：見逃した異変を、教室の後ろの掲示板で教えてくれます", w / 2, 146);
-  }
-  const top = setup ? 200 : 160, rowH = Math.min(setup ? 100 : 78, (h - top - 70) / items.length), boxH = Math.min(setup ? 76 : 64, rowH - 8);   // 項目が増えても枠に収まるように詰める
-  items.forEach(([label], i) => {
-    const y = top + i * rowH, on = i === VRMENU.sel;
-    const rec = setup && /^[●○] /.test(label), go = setup && i === items.length - 1, sick = !setup && label.startsWith("酔ってきた");   // おすすめの2つ・「講義室に入る」・「酔ってきた」は色を変える
-    ctx.fillStyle = on ? "#b7c9a8" : go ? "#3a2a22" : rec || sick ? "#2a3d33" : "#18201d"; ctx.fillRect(110, y - boxH / 2, w - 220, boxH);
-    ctx.fillStyle = on ? "#101413" : "#e9e4d6"; ctx.font = `700 ${Math.round(boxH * 0.58)}px ${G}`; ctx.fillText(label, w / 2, y + 2);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = "#e9e4d6"; ctx.font = '800 64px "Shippori Mincho B1", serif'; ctx.fillText(VRMENU_TITLES[k] || "", w / 2, 84);
+  let y = 150;
+  if (k === "setup") { ctx.fillStyle = "#b9bfb4"; ctx.font = `500 34px ${G}`; ctx.fillText(courseLabel(), w / 2, 160); y = 220; }
+  if (k === "staff") { ctx.fillStyle = "#9aa097"; ctx.font = `500 26px ${G}`; ctx.fillText("部員が使う設定です", w / 2, 140); y = 180; }
+  // 項目の高さ：大きいボタン 170（2行目あり）／130、ふつう 74、小さい 70。ページの項目が多いときは詰める
+  const H = ([, , shape, sub]) => shape === "big" ? (sub ? 176 : 136) : shape === "small" ? 70 : 74;
+  const total = items.reduce((a, it) => a + H(it) + 14, 0), avail = h - y - 110, sc = Math.min(1, avail / total);
+  items.forEach((it, i) => {
+    const [label, , shape, sub] = it, hh = H(it) * sc, on = i === VRMENU.sel, top = y;
+    y += hh + 14 * sc;
+    const cy = top + hh / 2;
+    if (shape === "small") {   // 小さい項目は文字だけ（選んでいるときは枠）
+      if (on) { ctx.fillStyle = "#b7c9a8"; ctx.fillRect(300, top + 6, w - 600, hh - 12); }
+      ctx.fillStyle = on ? "#101413" : "#aab0a5"; ctx.font = `600 ${Math.round(34 * sc)}px ${G}`; ctx.fillText(label, w / 2, cy + 1);
+      return;
+    }
+    const sick = label.startsWith("酔ってきた") || label.startsWith("酔いやすい");
+    ctx.fillStyle = on ? "#b7c9a8" : shape === "big" ? (sick ? "#24352c" : "#2c3a32") : sick ? "#24352c" : "#18201d";
+    ctx.fillRect(shape === "big" ? 90 : 120, top, w - (shape === "big" ? 180 : 240), hh);
+    if (shape === "big" && !on) { ctx.strokeStyle = "#5d6b60"; ctx.lineWidth = 3; ctx.strokeRect(90, top, w - 180, hh); }
+    ctx.fillStyle = on ? "#101413" : "#e9e4d6";
+    if (shape === "big") {
+      ctx.font = `800 ${Math.round(60 * sc)}px ${G}`; ctx.fillText(label, w / 2, sub ? cy - 22 * sc : cy + 2);
+      if (sub) { ctx.font = `500 ${Math.round(30 * sc)}px ${G}`; ctx.fillStyle = on ? "#22302a" : "#b9bfb4"; ctx.fillText(sub, w / 2, cy + 38 * sc); }
+    } else { ctx.font = `700 ${Math.round(40 * sc)}px ${G}`; ctx.fillText(label, w / 2, cy + 2); }
   });
   ctx.fillStyle = "#9aa097"; ctx.font = `500 26px ${G}`;
-  ctx.fillText(setup ? "スティックで選ぶ　トリガーで決める（あとで X／A でも変更可）" : "左スティックの上下で選ぶ　トリガーで決める　X／A で閉じる", w / 2, h - 34);
+  if (k === "setup") ctx.fillText("設定は、遊びながら X ボタンでも変えられます", w / 2, h - 82);
+  const foot = k === "setup" ? "スティックで選ぶ　トリガーで決める"
+    : k === "setupmore" ? "スティックで選ぶ　トリガーで切り替える"
+    : "スティックで選ぶ　トリガーで決める　X で閉じる　（ルールは Y ボタン）";
+  ctx.fillText(foot, w / 2, h - 40);
   ctx.fillStyle = "#6c726b"; ctx.font = `500 18px ${G}`; ctx.textAlign = "right"; ctx.fillText("版 " + BUILD, w - 18, 22); ctx.textAlign = "center";   // 古いページのままか確かめる用
   VRMENU.tex.needsUpdate = true;
 }
@@ -5367,7 +5407,7 @@ function openVrMenu(kind = "pause") {
     VRMENU.mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.75), new THREE.MeshBasicMaterial({ map: VRMENU.tex, transparent: true, depthTest: false, fog: false }));
     VRMENU.mesh.renderOrder = 26; VRMENU.mesh.position.set(0, -0.02, -0.85); camera.add(VRMENU.mesh);
   }
-  state.mode = "vrmenu"; sprint = false; VRMENU.sel = kind === "pause" ? 1 : 0; drawVrMenu(); VRMENU.mesh.visible = true;   // 一時停止は「再開する」を選んだ状態で開く（いちばん上の「酔ってきた」をうっかり押さないように）
+  state.mode = "vrmenu"; sprint = false; VRMENU.sel = 0; drawVrMenu(); VRMENU.mesh.visible = true;   // 一時停止はいちばん上の「再開する」を選んだ状態で開く
 }
 function closeVrMenu() {
   if (VRMENU.mesh) VRMENU.mesh.visible = false;
@@ -5449,7 +5489,7 @@ function pollVrButtons() {
     const down = (i) => now[i] && !prev[i];
     src._btn = now;
     if (down(4)) {   // X（左）／A（右）：一時停止メニュー
-      if (state.mode === "play") openVrMenu(); else if (state.mode === "vrmenu" && VRMENU.kind === "pause") closeVrMenu();
+      if (state.mode === "play") openVrMenu(); else if (state.mode === "vrmenu" && VR_PAUSE_KINDS.includes(VRMENU.kind)) closeVrMenu();   // はじめる前の画面は X では閉じない
     }
     if (down(5)) {   // Y（左）／B（右）：ルールと操作の紙
       if (state.mode === "play") openGuide(false); else if (state.mode === "guide") closeGuide(false);
@@ -6255,6 +6295,7 @@ addEventListener("resize", resize);
 
 // テスト用フック
 window.__fl = {
+  vrMenuGo, VR_PAUSE_KINDS,
   RING, updateRing, feelingSick, COMFORT_SICK, COMFORT_DEFAULT, smoothFloor, followFloor, EYE_VSPEED,
   TUTOR, updateTutor, tutorReset,
   LOBBY, enterLobby, leaveLobby, lobbyStart, stopKnock, CTRL_HINT, updateCtrlHint, drawHanamaru, VR_GRIPS,
