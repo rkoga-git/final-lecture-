@@ -396,6 +396,8 @@ fieldset.comfort legend { font-size: 13px; color: var(--muted); padding: 0 6px; 
           <div class="row"><label for="chk-dash">ダッシュを使う</label><input id="chk-dash" type="checkbox" checked></div>
           <div class="row"><label for="chk-vignette">酔い止めの縁取り（VR）</label><input id="chk-vignette" type="checkbox"></div>
           <div class="row"><label for="chk-snap">向きを30°ずつ変える（VR）</label><input id="chk-snap" type="checkbox"></div>
+          <div class="row"><label for="chk-slow">ゆっくり歩く</label><input id="chk-slow" type="checkbox"></div>
+          <div class="row"><label for="chk-ring">足もとの輪（VR）</label><input id="chk-ring" type="checkbox" checked></div>
         </fieldset>
       </div>
       <details class="staff">
@@ -469,7 +471,7 @@ fieldset.comfort legend { font-size: 13px; color: var(--muted); padding: 0 6px; 
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 
 // 版：Quest のブラウザが古いページを出したままのことがあるので、タイトルと VR の「はじめる前に」に小さく出す（10/29）。更新のたびに書き換える
-const BUILD = "2026-10-29d";
+const BUILD = "2026-10-30a";
 document.getElementById("build-tag").textContent = "版 " + BUILD;
 
 // ============================================================================
@@ -3864,19 +3866,23 @@ function keepHeadInside() {
   if (walkable(h.x, h.z, pointFloor(h.x, h.z))) { lastValidHead = { x: h.x, z: h.z }; return; }
   if (lastValidHead) { rig.position.x += lastValidHead.x - h.x; rig.position.z += lastValidHead.z - h.z; }
 }
-// 目線の高さ用の床：教室の中では前後1mの床の高さを平均して、段差をスロープのようになめらかにする
+// 目線の高さ用の床：教室の中では前後の床の高さを平均して、段差をスロープのようになめらかにする
 // （通路の半段を降りるたびに目線がガクッと落ちると、VRではとても酔いやすい。足元の当たり判定は pointFloor のまま）
+//  10/30：まだ酔う人がいる（作者）→ 平均する幅を前後1m→前後2mにして、坂をゆるやかに。目線の上下の速さにも上限（毎秒0.45m）をつけた
+//  （以前は速く追いかけていたので、段の境目で上下の速さが急に変わっていた）。重みは真ん中ほど大きく（三角形）して、坂の始まり・終わりもなめらかに
 function smoothFloor(x, z) {
   const r = rectAt(x, z);
   if (!r || r.zone !== "room") return pointFloor(x, z);
   let s = 0, n = 0;
-  for (let k = -4; k <= 4; k++) { const sx = THREE.MathUtils.clamp(x + k * 0.125, ROOM.x0 + 0.01, ROOM.x1 - 0.01); s += roomFloorAt(sx, z); n++; }
+  for (let k = -16; k <= 16; k++) { const sx = THREE.MathUtils.clamp(x + k * 0.125, ROOM.x0 + 0.01, ROOM.x1 - 0.01), wgt = 17 - Math.abs(k); s += roomFloorAt(sx, z) * wgt; n += wgt; }
   return s / n;
 }
+const EYE_VSPEED = 0.45;   // 目線が上下する速さの上限（m/秒）
 function followFloor(dt) {
   const h = headPos();
   const target = smoothFloor(h.x, h.z);
-  curFloor += (target - curFloor) * Math.min(1, dt * 12);
+  const want = (target - curFloor) * Math.min(1, dt * 6), lim = EYE_VSPEED * dt;
+  curFloor += THREE.MathUtils.clamp(want, -lim, lim);
   if (Math.abs(target - curFloor) < 0.002) curFloor = target;
   rig.position.y = curFloor;
 }
@@ -5070,8 +5076,7 @@ function updateCtrlHint() {
     if (vrOn) {
       if (CTRL_HINT.mesh.parent !== grip) {
         grip.add(CTRL_HINT.mesh);
-        // コントローラーの上、手首寄りに、顔のほうへ起こして置く（手元を見下ろすと読める）
-        CTRL_HINT.mesh.position.set(0, 0.045, 0.045); CTRL_HINT.mesh.rotation.set(-1.0, 0, 0);
+        CTRL_HINT.mesh.position.set(0, 0.13, 0.0); CTRL_HINT.mesh.rotation.set(-0.45, 0, 0);   // 10/30 作者「もっと上の方でもいい」：コントローラーの13cm上に、ほぼ起こして
       }
       const vk = KID.on ? "kid" : "std";
       if (vk !== CTRL_HINT.vrKey) { CTRL_HINT.vrKey = vk; drawCtrlHintCard(); }
@@ -5115,13 +5120,15 @@ function turnRigAroundHead(a) {
 }
 const COMFORT_KEY = "final-lecture-comfort-v1";
 //  酔い対策の設定は遊ぶ人ごとに選ぶもの。端末には保存せず、次の人が遊ぶとき（クリア後・タイトルへ戻る・VRに入る）に初期値へ戻す
-const COMFORT_DEFAULT = { dash: true, vignette: false, turn: "smooth" };   // turn："smooth"（なめらか・初期）／"snap"（30°ずつ）
-const COMFORT_SICK = { dash: false, vignette: true, turn: "snap" };       // 酔いやすい人向け
+// 10/30：slow（ゆっくり歩く。酔いやすい人向けだけ。作者の希望）・ring（足もとの輪。どちらもオン）を足した
+const COMFORT_DEFAULT = { dash: true, vignette: false, turn: "smooth", slow: false, ring: true };   // turn："smooth"（なめらか・初期）／"snap"（30°ずつ）
+const COMFORT_SICK = { dash: false, vignette: true, turn: "snap", slow: true, ring: true };         // 酔いやすい人向け
 const COMFORT = { ...COMFORT_DEFAULT };
 try { localStorage.removeItem(COMFORT_KEY); localStorage.removeItem(HELP_KEY); } catch (e) { /* 以前に保存した設定は使わない */ }
-const comfortIs = (p) => COMFORT.dash === p.dash && COMFORT.vignette === p.vignette && COMFORT.turn === p.turn;
+const comfortIs = (p) => COMFORT.dash === p.dash && COMFORT.vignette === p.vignette && COMFORT.turn === p.turn && COMFORT.slow === p.slow && COMFORT.ring === p.ring;
 function saveComfort() {   // （名前は以前のまま）画面の表示を今の設定に合わせる
   $("chk-dash").checked = COMFORT.dash; $("chk-vignette").checked = COMFORT.vignette; $("chk-snap").checked = COMFORT.turn === "snap";
+  $("chk-slow").checked = COMFORT.slow; $("chk-ring").checked = COMFORT.ring;
   if (!COMFORT.dash) sprint = false;
 }
 $("chk-dash").checked = COMFORT.dash; $("chk-vignette").checked = COMFORT.vignette;
@@ -5130,6 +5137,8 @@ $("chk-snap").checked = COMFORT.turn === "snap";
 $("chk-snap").addEventListener("change", (e) => { COMFORT.turn = e.target.checked ? "snap" : "smooth"; saveComfort(); });
 $("btn-guide").addEventListener("click", () => { show(null); openGuide(false); });
 $("chk-vignette").addEventListener("change", (e) => { COMFORT.vignette = e.target.checked; saveComfort(); });
+$("chk-slow").checked = COMFORT.slow; $("chk-slow").addEventListener("change", (e) => { COMFORT.slow = e.target.checked; saveComfort(); });
+$("chk-ring").checked = COMFORT.ring; $("chk-ring").addEventListener("change", (e) => { COMFORT.ring = e.target.checked; saveComfort(); });
 for (const id of ["chk-help", "chk-help2"]) { $(id).checked = helpOn(); $(id).addEventListener("change", (e) => setHelp(e.target.checked)); }
 // 酔い止めの縁取り（VRのみ）：動いている間だけ、視界の外側をなめらかに暗くする。止まると消える
 const vignetteTex = canvasTex(1024, 1024, (ctx, w, h) => {
@@ -5146,6 +5155,35 @@ const vignetteMesh = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), vignetteMat);
 vignetteMesh.position.set(0, 0, -0.5); vignetteMesh.renderOrder = 19; vignetteMesh.visible = false; camera.add(vignetteMesh);
 let comfortHold = 0;
 function comfortPulse(sec) { comfortHold = Math.max(comfortHold, sec); }
+// 足もとの輪（10/30 作者が選択）：自分と一緒に動く、床の上のうっすらした輪。乗り物の床のように「動いていない基準」が見えていると、
+//  歩いたり向きを変えたりしたときの目と体のずれが小さく感じられて、酔いにくくなる。視界は隠さない。
+//  rig（自分の体）の子にするので、スティックで向きを変えても輪は体と一緒（まわりの景色だけが回る）。歩く・向きを変える間だけ浮かび上がり、止まると薄く消える（怖さを邪魔しない）
+const RING = (() => {
+  const t = canvasTex(512, 512, (ctx, w, h) => {
+    ctx.clearRect(0, 0, w, h); ctx.translate(w / 2, h / 2);
+    ctx.strokeStyle = "rgba(225,235,228,0.9)"; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(0, 0, 200, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(225,235,228,0.45)"; ctx.beginPath(); ctx.arc(0, 0, 150, 0, Math.PI * 2); ctx.stroke();
+    // 目盛り（12本）と、前を示す小さな三角：向きを変えたとき、景色だけが回って輪が止まっているのが分かる
+    for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6; ctx.lineWidth = i % 3 ? 4 : 7; ctx.strokeStyle = "rgba(225,235,228,0.85)"; ctx.beginPath(); ctx.moveTo(Math.sin(a) * 182, -Math.cos(a) * 182); ctx.lineTo(Math.sin(a) * 222, -Math.cos(a) * 222); ctx.stroke(); }
+    ctx.fillStyle = "rgba(225,235,228,0.9)"; ctx.beginPath(); ctx.moveTo(0, -246); ctx.lineTo(-16, -226); ctx.lineTo(16, -226); ctx.closePath(); ctx.fill();
+  }, { clampS: true, clampT: true });
+  const mat = new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: 0, depthTest: false, depthWrite: false, fog: false });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), mat);
+  mesh.rotation.x = -Math.PI / 2; mesh.position.y = 0.03; mesh.renderOrder = 3; mesh.visible = false;
+  rig.add(mesh);
+  return { mesh, mat, hold: 0 };
+})();
+const _rh = new THREE.Vector3();
+function updateRing(dt, moving) {
+  const on = COMFORT.ring && renderer.xr.isPresenting && state.mode === "play" && !LOBBY.on;
+  RING.hold = moving || comfortHold > 0 ? 0.6 : Math.max(0, RING.hold - dt);   // 動きが止まってから0.6秒で消え始める
+  const target = on && RING.hold > 0 ? 0.32 : 0;
+  RING.mat.opacity += (target - RING.mat.opacity) * Math.min(1, dt * 5);
+  RING.mesh.visible = RING.mat.opacity > 0.01;
+  if (RING.mesh.visible) {   // 輪の真ん中は頭の真下（rig の中で頭が動いても足もとに）。向きは rig のまま
+    camera.getWorldPosition(_rh); rig.worldToLocal(_rh); RING.mesh.position.set(_rh.x, 0.03, _rh.z);
+  }
+}
 function updateVignette(dt, moving) {
   const on = COMFORT.vignette && renderer.xr.isPresenting && state.mode === "play";
   if (moving) comfortPulse(0.12);
@@ -5258,6 +5296,15 @@ const VRMENU = { mesh: null, tex: null, sel: 0, navArmed: true, kind: "pause" };
 const turnItem = () => [`向きの変え方：${COMFORT.turn === "snap" ? "30°ずつ" : "なめらか"}`, () => { COMFORT.turn = COMFORT.turn === "snap" ? "smooth" : "snap"; saveComfort(); drawVrMenu(); }];
 const vignetteItem = () => [`酔い止めの縁取り：${COMFORT.vignette ? "オン" : "オフ"}`, () => { COMFORT.vignette = !COMFORT.vignette; saveComfort(); drawVrMenu(); }];
 const dashItem = () => [`ダッシュ：${COMFORT.dash ? "オン" : "オフ"}`, () => { COMFORT.dash = !COMFORT.dash; saveComfort(); drawVrMenu(); }];
+const slowItem = () => [`歩く速さ：${COMFORT.slow ? "ゆっくり" : "ふつう"}`, () => { COMFORT.slow = !COMFORT.slow; saveComfort(); drawVrMenu(); }];
+const ringItem = () => [`足もとの輪：${COMFORT.ring ? "オン" : "オフ"}`, () => { COMFORT.ring = !COMFORT.ring; saveComfort(); drawVrMenu(); }];
+// 「酔ってきた」（10/30 作者が選択）：一時停止メニューのいちばん上。押すと酔いにくい設定（30°ずつ・縁取り・走らない・ゆっくり・足もとの輪）を
+//  まとめて入れ、メニューを閉じて「少し休んでいい」と知らせる
+function feelingSick() {
+  Object.assign(COMFORT, COMFORT_SICK); saveComfort(); closeVrMenu();
+  vrMessage("酔いにくい設定にしました\n気分が悪いときは、無理せず外して休んでください");
+  setTimeout(() => { if (vrPanel && state.mode === "play") vrPanel.visible = false; }, 5000);
+}
 function vrMenuItems() {
   if (VRMENU.kind === "setup") {
     // VR の入口（ロビー）の「はじめる前に」：コース（学祭）／履修区分（ふだん）→ 酔い対策のおすすめ2つ → 細かい設定 → 講義室に入る
@@ -5270,16 +5317,17 @@ function vrMenuItems() {
       first,
       preset("VRに慣れている人向け", COMFORT_DEFAULT),
       preset("酔いやすい人向け", COMFORT_SICK),
-      turnItem(), vignetteItem(), dashItem(),
+      turnItem(), vignetteItem(), dashItem(), slowItem(), ringItem(),
       [`お助け掲示板：${helpOn() ? "オン" : "オフ"}`, () => { setHelp(!helpOn()); drawVrMenu(); }],
       ["講義室に入る", () => lobbyStart()]
     ];
   }
   return [
     // 遊ぶ人向け（再開・ルール・酔い対策・やり直し・終了）→ 最後にスタッフ向け
+    ["酔ってきた（酔いにくい設定にする）", () => feelingSick()],
     ["再開する", () => closeVrMenu()],
     ["ルールと操作を見る", () => { closeVrMenu(); openGuide(false); }],
-    turnItem(), vignetteItem(), dashItem(),
+    turnItem(), vignetteItem(), dashItem(), slowItem(),
     ["1限目からやり直す", () => { closeVrMenu(); resetRun(); startIntro(); }],
     ["VRを終了する", () => { closeVrMenu(); renderer.xr.getSession()?.end(); }],
     [`（スタッフ）お助け掲示板：${helpOn() ? "オン" : "オフ"}`, () => { setHelp(!helpOn()); drawVrMenu(); }],
@@ -5289,7 +5337,7 @@ function vrMenuItems() {
   ];
 }
 function drawVrMenu() {
-  const ctx = VRMENU.tex.userData.ctx, w = 1024, h = 768, items = vrMenuItems(), G = '"Zen Kaku Gothic New", sans-serif';
+  const ctx = VRMENU.tex.userData.ctx, w = 1024, h = 960, items = vrMenuItems(), G = '"Zen Kaku Gothic New", sans-serif';   // 10/30：項目が増えたので 768→960
   ctx.clearRect(0, 0, w, h); ctx.fillStyle = "rgba(16,20,19,.94)"; ctx.fillRect(0, 0, w, h);
   ctx.strokeStyle = "#2a312d"; ctx.lineWidth = 4; ctx.strokeRect(2, 2, w - 4, h - 4);
   ctx.fillStyle = "#e9e4d6"; ctx.font = '800 58px "Shippori Mincho B1", serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -5303,8 +5351,8 @@ function drawVrMenu() {
   const top = setup ? 200 : 160, rowH = Math.min(setup ? 100 : 78, (h - top - 70) / items.length), boxH = Math.min(setup ? 76 : 64, rowH - 8);   // 項目が増えても枠に収まるように詰める
   items.forEach(([label], i) => {
     const y = top + i * rowH, on = i === VRMENU.sel;
-    const rec = setup && /^[●○] /.test(label), go = setup && i === items.length - 1;   // おすすめの2つと「講義室に入る」は色を変える
-    ctx.fillStyle = on ? "#b7c9a8" : go ? "#3a2a22" : rec ? "#2a3d33" : "#18201d"; ctx.fillRect(110, y - boxH / 2, w - 220, boxH);
+    const rec = setup && /^[●○] /.test(label), go = setup && i === items.length - 1, sick = !setup && label.startsWith("酔ってきた");   // おすすめの2つ・「講義室に入る」・「酔ってきた」は色を変える
+    ctx.fillStyle = on ? "#b7c9a8" : go ? "#3a2a22" : rec || sick ? "#2a3d33" : "#18201d"; ctx.fillRect(110, y - boxH / 2, w - 220, boxH);
     ctx.fillStyle = on ? "#101413" : "#e9e4d6"; ctx.font = `700 ${Math.round(boxH * 0.58)}px ${G}`; ctx.fillText(label, w / 2, y + 2);
   });
   ctx.fillStyle = "#9aa097"; ctx.font = `500 26px ${G}`;
@@ -5315,11 +5363,11 @@ function drawVrMenu() {
 function openVrMenu(kind = "pause") {
   VRMENU.kind = kind;
   if (!VRMENU.mesh) {
-    VRMENU.tex = canvasTex(1024, 768, () => {}, { clampS: true, clampT: true });
-    VRMENU.mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.6), new THREE.MeshBasicMaterial({ map: VRMENU.tex, transparent: true, depthTest: false, fog: false }));
+    VRMENU.tex = canvasTex(1024, 960, () => {}, { clampS: true, clampT: true });
+    VRMENU.mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.75), new THREE.MeshBasicMaterial({ map: VRMENU.tex, transparent: true, depthTest: false, fog: false }));
     VRMENU.mesh.renderOrder = 26; VRMENU.mesh.position.set(0, -0.02, -0.85); camera.add(VRMENU.mesh);
   }
-  state.mode = "vrmenu"; sprint = false; VRMENU.sel = 0; drawVrMenu(); VRMENU.mesh.visible = true;
+  state.mode = "vrmenu"; sprint = false; VRMENU.sel = kind === "pause" ? 1 : 0; drawVrMenu(); VRMENU.mesh.visible = true;   // 一時停止は「再開する」を選んだ状態で開く（いちばん上の「酔ってきた」をうっかり押さないように）
 }
 function closeVrMenu() {
   if (VRMENU.mesh) VRMENU.mesh.visible = false;
@@ -5585,9 +5633,9 @@ function vrMessage(text, who) {
   }
   ctx.fillStyle = who === "friend" ? "#f6dfb0" : who === "self" ? "#b8b4a9" : who === "tutor" ? "#d6ead0" : "#e9e4d6";
   ctx.font = who === "tutor" ? `700 48px ${G}` : `${who === "self" ? 600 : 800} ${who === "self" ? 58 : 64}px "Shippori Mincho B1", serif`;
-  if (who === "tutor") {   // 道案内は文が長いので、板の幅（960px）に収まるように文字を小さくする
+  {   // 板の幅（960px）に収まるように文字を小さくする（道案内・「酔ってきた」の知らせなど、長い文のとき）
     const wMax = Math.max(...text.split("\n").map(l => ctx.measureText(l).width));
-    if (wMax > 960) ctx.font = `700 ${Math.floor(48 * 960 / wMax)}px ${G}`;
+    if (wMax > 960) ctx.font = ctx.font.replace(/(\d+)px/, (m0, px) => `${Math.floor(+px * 960 / wMax)}px`);
   }
   vrPanel.position.set(0, who === "tutor" ? -0.42 : 0, -1.4);   // 道案内は視界の下のほう（教室を見る邪魔にならないように）
   text.split("\n").forEach((line, i, arr) => ctx.fillText(line, 512, cy + (i - (arr.length - 1) / 2) * 80));
@@ -5685,7 +5733,8 @@ function update(dt) {
     fwd.y = 0; fwd.normalize(); right.set(-fwd.z, 0, fwd.x);
     const len = Math.hypot(mx, mz);
     if (len < 0.05) sprint = false;
-    const speed = (renderer.xr.isPresenting ? 1.8 : 2.2) * (sprint ? 1.7 : 1) * (DEBUG.fast ? 3 : 1);
+    // 歩く速さ：VR 1.8m/s・PC 2.2m/s。「ゆっくり歩く」（酔いやすい人向け）は VR 1.3m/s（人のふつうの歩く速さより少し遅い）・PC 1.6m/s
+    const speed = (renderer.xr.isPresenting ? (COMFORT.slow ? 1.3 : 1.8) : (COMFORT.slow ? 1.6 : 2.2)) * (sprint ? 1.7 : 1) * (DEBUG.fast ? 3 : 1);
     if (len > 0.05) {
       moving = true;
       const k = Math.min(1, len) / len * speed * dt;
@@ -5705,7 +5754,7 @@ function update(dt) {
   }
   if (state.mode === "intro" || state.mode === "epilogue") updateStory(dt);
   updateLid(dt);
-  updateVignette(dt, moving);
+  updateVignette(dt, moving); updateRing(dt, moving);
   updateVrCert(dt);
   updateDemo(dt);
   if (!renderer.xr.isPresenting) {
@@ -6206,6 +6255,7 @@ addEventListener("resize", resize);
 
 // テスト用フック
 window.__fl = {
+  RING, updateRing, feelingSick, COMFORT_SICK, COMFORT_DEFAULT, smoothFloor, followFloor, EYE_VSPEED,
   TUTOR, updateTutor, tutorReset,
   LOBBY, enterLobby, leaveLobby, lobbyStart, stopKnock, CTRL_HINT, updateCtrlHint, drawHanamaru, VR_GRIPS,
   BUILD, XRSCALE, setXrScaleWant, applyXrScale, KID, friendSay, friendVoice, showEnding, climaxLines, startClimax, updateClimax, drawBoard, vrMessage,
