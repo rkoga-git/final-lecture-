@@ -474,7 +474,7 @@ details.comfortd { margin: 6px 0 2px; }
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 
 // 版：Quest のブラウザが古いページを出したままのことがあるので、タイトルと VR の「はじめる前に」に小さく出す（10/29）。更新のたびに書き換える
-const BUILD = "2026-10-30b";
+const BUILD = "2026-10-30c";
 document.getElementById("build-tag").textContent = "版 " + BUILD;
 
 // ============================================================================
@@ -2808,7 +2808,24 @@ for (const [c, oy] of [[CF, 0], [CB, TOP]]) {
 
 // ---- 長い廊下：学内掲示板（両方の廊下の同じ位置。ワープの手前で必ず目に入る） ----
 const BOARD2_DX = 5.5, BOARD2_W = 1.8, BOARD2_H = 1.0;
+// 部活のポスター（10/30 作者）：1ファイル版を作るときに画像を window.__POSTER（data: URL）として埋め込んだときだけ、
+//  学祭モードで掲示板の右上（軽音楽部の勧誘と図書館の貼り紙の場所）に縦長のポスターを貼る。もらい物の画像なので、
+//  公開ページ（GitHub）には入れず、作者のパソコンに置く学祭用の1ファイル版にだけ埋め込む（build_offline の POSTER）。
+//  ポスターがあるときは、掲示板の絵を2倍の細かさで描く（ポスターの文字が読めるように）。異変（休講の追記・白紙）には関係しない
+const CLUB_POSTER = { url: (typeof window !== "undefined" && window.__POSTER) || null, img: null };
+const CAMPUS_SCALE = CLUB_POSTER.url ? 2 : 1;
+function festNow() { try { return FEST; } catch (e) { return false; } }   // 掲示板は FEST の宣言より前に一度描くので、そのときは「学祭モードでない」
+if (CLUB_POSTER.url) {
+  const im = new Image();
+  im.onload = () => { CLUB_POSTER.img = im; if (festNow()) { queueTexDraw(campusTex); queueTexDraw(campusTexBad); } };
+  im.src = CLUB_POSTER.url;
+}
 function drawCampusBoard(ctx, w, h, anomalous) {
+  ctx.save(); ctx.setTransform(w / 1024, 0, 0, h / 568, 0, 0);   // 絵の座標はいつも 1024×568（細かく描くときは拡大する）
+  drawCampusBoard1(ctx, 1024, 568, anomalous);
+  ctx.restore();
+}
+function drawCampusBoard1(ctx, w, h, anomalous) {
   const G = '"Zen Kaku Gothic New", sans-serif', H = '"Yomogi", "Zen Kaku Gothic New", sans-serif';
   const rnd = rng(21);
   // 枠とコルク
@@ -2852,6 +2869,12 @@ function drawCampusBoard(ctx, w, h, anomalous) {
   text("教務課", 286, 238, 15, "#555", 400, G, "right");
   ctx.restore(); pin(520, 42);
 
+  if (festNow() && CLUB_POSTER.img) {
+    // (3') 学祭モード：部活のポスター（A4 縦。勧誘と図書館の貼り紙の代わり）
+    paper(704, 26, 280, 396, "#ffffff", -0.012);
+    ctx.drawImage(CLUB_POSTER.img, 0, 0, 280, 396);
+    ctx.restore(); pin(844, 32, "#2a6"); pin(714, 34, "#c22"); pin(974, 34, "#36c");
+  } else {
   // (3) サークル勧誘（手書き風）
   paper(700, 34, 280, 200, "#fff7c7", -0.03);
   text("軽音楽部", 140, 54, 38, "#c0392b", 400, H, "center");
@@ -2860,6 +2883,7 @@ function drawCampusBoard(ctx, w, h, anomalous) {
   text("部室：サークル棟2F", 140, 168, 18, "#444", 400, H, "center");
   ctx.fillStyle = "#222"; ctx.beginPath(); ctx.arc(244, 156, 9, 0, 7); ctx.fill(); ctx.fillRect(251, 116, 3, 40);
   ctx.restore(); pin(840, 40, "#2a6");
+  }
 
   // (4) キャリアセンター
   paper(380, 312, 290, 210, "#eef4f8", -0.004);
@@ -2871,13 +2895,15 @@ function drawCampusBoard(ctx, w, h, anomalous) {
   text("申込不要・服装自由", 18, 186, 16, "#555", 400);
   ctx.restore(); pin(525, 318);
 
-  // (5) 図書館
+  // (5) 図書館（学祭モードでポスターを貼っているときは、ポスターの下になるので貼らない）
+  if (!(festNow() && CLUB_POSTER.img)) {
   paper(700, 262, 280, 150, "#ffffff", 0.012);
   text("附属図書館", 16, 38, 16, "#7a4a1d", 700);
   text("試験期間の開館時間", 16, 76, 22, "#222", 700);
   text("平日 8:45 〜 22:00", 16, 110, 19, "#333", 400);
   text("土日 10:00 〜 17:00", 16, 136, 19, "#333", 400);
   ctx.restore(); pin(840, 268);
+  }
 
   // (6) 落とし物
   paper(704, 436, 200, 110, "#f6f4ee", -0.02);
@@ -2890,8 +2916,8 @@ function drawCampusBoard(ctx, w, h, anomalous) {
   ctx.fillStyle = "rgba(240,235,220,.5)"; ctx.fillRect(56, 486, 120, 50);
   pin(70, 492, "#999");
 }
-const campusTex = canvasTex(1024, 568, (ctx, w, h) => drawCampusBoard(ctx, w, h, false), { clampS: true, clampT: true });
-const campusTexBad = canvasTex(1024, 568, (ctx, w, h) => drawCampusBoard(ctx, w, h, true), { clampS: true, clampT: true });
+const campusTex = canvasTex(1024 * CAMPUS_SCALE, 568 * CAMPUS_SCALE, (ctx, w, h) => drawCampusBoard(ctx, w, h, false), { clampS: true, clampT: true });
+const campusTexBad = canvasTex(1024 * CAMPUS_SCALE, 568 * CAMPUS_SCALE, (ctx, w, h) => drawCampusBoard(ctx, w, h, true), { clampS: true, clampT: true });
 const campusMat = patch(new THREE.MeshBasicMaterial({ vertexColors: true, map: campusTex }), 0.15);
 for (const [c, oy] of [[CF, 0], [CB, TOP]]) {
   const bx = c + BOARD2_DX;
@@ -4130,6 +4156,7 @@ function applyKidsText() {   // 学祭モードの案内の出し入れと、短
   for (const k of ["r3", "r4"]) $("syl-" + k).innerHTML = KID.on ? SYL_KIDS[k] : SYL_RULES[k];
   if (KID.on) $("syl-penalty").textContent = "まちがえても、おなじ時間を もういちど やるだけ。"; else refreshSyllabus();
   for (const t of [...DOOR_PLATES, savingTex, corrNoticeBig]) queueTexDraw(t);
+  if (CLUB_POSTER.img) { queueTexDraw(campusTex); queueTexDraw(campusTexBad); }   // 学祭モードの切り替えで、部活のポスターを貼る・はがす
   queueTexDraw(boardTex, drawBoard); queueTexDraw(ttTex, drawTimetable);
 }
 function refreshSyllabus() {
@@ -6295,6 +6322,7 @@ addEventListener("resize", resize);
 
 // テスト用フック
 window.__fl = {
+  CLUB_POSTER, campusTex,
   vrMenuGo, VR_PAUSE_KINDS,
   RING, updateRing, feelingSick, COMFORT_SICK, COMFORT_DEFAULT, smoothFloor, followFloor, EYE_VSPEED,
   TUTOR, updateTutor, tutorReset,
