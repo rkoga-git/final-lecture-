@@ -484,7 +484,7 @@ details.comfortd { margin: 6px 0 2px; }
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 
 // 版：Quest のブラウザが古いページを出したままのことがあるので、タイトルと VR の「はじめる前に」に小さく出す（10/29）。更新のたびに書き換える
-const BUILD = "2026-10-30d";
+const BUILD = "2026-10-30e";
 document.getElementById("build-tag").textContent = "版 " + BUILD;
 
 // ============================================================================
@@ -3914,19 +3914,27 @@ function keepHeadInside() {
 // （通路の半段を降りるたびに目線がガクッと落ちると、VRではとても酔いやすい。足元の当たり判定は pointFloor のまま）
 //  10/30：まだ酔う人がいる（作者）→ 平均する幅を前後1m→前後2mにして、坂をゆるやかに。目線の上下の速さにも上限（毎秒0.45m）をつけた
 //  （以前は速く追いかけていたので、段の境目で上下の速さが急に変わっていた）。重みは真ん中ほど大きく（三角形）して、坂の始まり・終わりもなめらかに
+//  10/30 夕方：見本を 12.5cm おきに取っていたので、坂が 3cm ずつの小さな段になり、そのたびに小さく揺れていた →
+//  見本の位置を 12.5cm の目盛りにそろえて2か所で計算し、そのあいだを線でつなぐ（坂が途切れずになめらかになる）
+const FLOOR_G = 0.125;
+function smoothFloorAt(xg, z) {
+  let s = 0, n = 0;
+  for (let k = -16; k <= 16; k++) { const sx = THREE.MathUtils.clamp(xg + k * FLOOR_G, ROOM.x0 + 0.01, ROOM.x1 - 0.01), wgt = 17 - Math.abs(k); s += roomFloorAt(sx, z) * wgt; n += wgt; }
+  return s / n;
+}
 function smoothFloor(x, z) {
   const r = rectAt(x, z);
   if (!r || r.zone !== "room") return pointFloor(x, z);
-  let s = 0, n = 0;
-  for (let k = -16; k <= 16; k++) { const sx = THREE.MathUtils.clamp(x + k * 0.125, ROOM.x0 + 0.01, ROOM.x1 - 0.01), wgt = 17 - Math.abs(k); s += roomFloorAt(sx, z) * wgt; n += wgt; }
-  return s / n;
+  const x0 = Math.floor(x / FLOOR_G) * FLOOR_G, t = (x - x0) / FLOOR_G;
+  return smoothFloorAt(x0, z) * (1 - t) + smoothFloorAt(x0 + FLOOR_G, z) * t;
 }
-const EYE_VSPEED = 0.45;   // 目線が上下する速さの上限（m/秒）
+//  10/30 夕方：上の「上下の速さの上限 0.45m/s」は、走ると坂に追いつけず、下りは宙に浮き・上りは段にめり込んで見えた（作者）→ 上限をやめた。
+//  なめらかさは坂の形（前後2mの三角形の重みで平均）で出し、目線はその坂にぴったりついていく（追いかけの遅れはほぼなし）
+const EYE_VSPEED = Infinity;   // （使わない。テスト用に残す）
 function followFloor(dt) {
   const h = headPos();
   const target = smoothFloor(h.x, h.z);
-  const want = (target - curFloor) * Math.min(1, dt * 6), lim = EYE_VSPEED * dt;
-  curFloor += THREE.MathUtils.clamp(want, -lim, lim);
+  curFloor += (target - curFloor) * Math.min(1, dt * 20);
   if (Math.abs(target - curFloor) < 0.002) curFloor = target;
   rig.position.y = curFloor;
 }
