@@ -77,6 +77,10 @@ button:focus-visible { outline: 2px solid var(--blood); outline-offset: 2px; }
 .keys { margin-top: 14px; font-size: 12.5px; color: #4b514b; line-height: 1.7; }
 .keys kbd { font-family: var(--body); border: 1px solid #9ca39a; border-bottom-width: 2px; border-radius: 3px; padding: 0 5px; font-size: 11.5px; background: #f3eee1; }
 .note { margin-top: 10px; font-size: 12.5px; color: #8b1016; line-height: 1.6; }
+.poster-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; font-size: 13px; }
+.poster-row span { flex: 1; }
+.poster-row small { display: block; color: #6a655b; font-size: 11.5px; }
+.poster-row .btnlike, .poster-row button { flex: 0 0 auto; width: auto; padding: 5px 10px; font-size: 12.5px; border: 1px solid rgba(40,36,28,.35); border-radius: 4px; background: #efe9da; color: #2a2720; cursor: pointer; }
 .build { margin-top: 8px; text-align: right; font-size: 11px; letter-spacing: .06em; color: #8a8f88; }   /* 版（Quest で古いページのままか確かめる用） */
 .diff { border: 0; padding: 0; margin: 0 0 16px; min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .diff legend { font-size: 12px; letter-spacing: .12em; color: #5a615a; margin-bottom: 6px; padding: 0; }
@@ -380,6 +384,12 @@ details.comfortd { margin: 6px 0 2px; }
         <label class="fest"><input type="checkbox" id="chk-fest"><span>学祭モード <small>朝から深夜までを短く駆け抜けます。異変は見ればわかるものだけ。間違えても同じコマをやり直すだけ</small></span></label>
         <label class="fest"><input type="checkbox" id="chk-hq" checked><span>高画質 <small>光の回り込み・くっきりした影・細かい模様。重い・見にくいと感じたら外すと以前の見た目に戻ります</small></span></label>
         <label class="fest"><input type="checkbox" id="chk-help"><span>お助け掲示板 <small>判断を誤ると、教室の後ろの掲示板に見逃した異変が貼られます</small></span></label>
+        <!-- 部活のポスター（学祭モードの廊下の掲示板）：画像はこの端末のブラウザの中にだけ保存する（ネットには出さない。10/30 作者） -->
+        <div class="poster-row">
+          <span>部活のポスター <small id="poster-state">なし</small></span>
+          <label class="btnlike">画像を選ぶ<input id="poster-file" type="file" accept="image/*" hidden></label>
+          <button id="btn-poster-clear" type="button">外す</button>
+        </div>
         <div class="actions"><button id="btn-records" type="button">プレイ記録</button></div>
       </details>
       <div class="keys">
@@ -483,7 +493,7 @@ details.comfortd { margin: 6px 0 2px; }
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 
 // 版：Quest のブラウザが古いページを出したままのことがあるので、タイトルと VR の「はじめる前に」に小さく出す（10/29）。更新のたびに書き換える
-const BUILD = "2026-10-30c";
+const BUILD = "2026-10-30d";
 document.getElementById("build-tag").textContent = "版 " + BUILD;
 
 // ============================================================================
@@ -2821,7 +2831,12 @@ const BOARD2_DX = 5.5, BOARD2_W = 1.8, BOARD2_H = 1.0;
 //  学祭モードで掲示板の右上（軽音楽部の勧誘と図書館の貼り紙の場所）に縦長のポスターを貼る。もらい物の画像なので、
 //  公開ページ（GitHub）には入れず、作者のパソコンに置く学祭用の1ファイル版にだけ埋め込む（build_offline の POSTER）。
 //  ポスターがあるときは、掲示板の絵を2倍の細かさで描く（ポスターの文字が読めるように）。異変（休講の追記・白紙）には関係しない
-const CLUB_POSTER = { url: (typeof window !== "undefined" && window.__POSTER) || null, img: null };
+//  10/30 夕方：Quest でも見せたい（作者）→ 公開ページのまま、スタッフ用の設定の「部活のポスター：画像を選ぶ」で端末の中の画像を選ぶと、
+//  縮めてこの端末のブラウザの中（localStorage）にだけ保存し、ページを読み込み直して使う（2倍の細かさの掲示板は起動のときに決めるため）。
+//  ネットには送らない。「外す」で消える。埋め込み（window.__POSTER）があればそちらを優先
+const CLUB_POSTER_KEY = "final-lecture-club-poster-v1";
+function storedPoster() { try { return localStorage.getItem(CLUB_POSTER_KEY); } catch (e) { return null; } }
+const CLUB_POSTER = { url: (typeof window !== "undefined" && window.__POSTER) || storedPoster() || null, img: null, embedded: !!(typeof window !== "undefined" && window.__POSTER) };
 const CAMPUS_SCALE = CLUB_POSTER.url ? 2 : 1;
 function festNow() { try { return FEST; } catch (e) { return false; } }   // 掲示板は FEST の宣言より前に一度描くので、そのときは「学祭モードでない」
 if (CLUB_POSTER.url) {
@@ -4156,6 +4171,36 @@ const SYL_KIDS = {
   r3: "1時間目は へんなところは ないよ。教室と ろうかを よく見て おぼえよう。黒板の よこの 時間わりに はんこが たまるよ。",
   r4: "時間が すすむと まどの外も くらくなるよ。それは へんなところでは ないよ。"
 };
+// 部活のポスターを選ぶ・外す（スタッフ用の設定）
+function refreshPosterUI() {
+  const st = $("poster-state"); if (!st) return;
+  st.textContent = CLUB_POSTER.embedded ? "入っています（このファイルに埋め込み）" : CLUB_POSTER.url ? "入っています（この端末だけ。学祭モードで貼られます）" : "なし（学祭モードで、廊下の掲示板に貼れます）";
+  $("btn-poster-clear").hidden = !CLUB_POSTER.url || CLUB_POSTER.embedded;
+}
+$("poster-file").addEventListener("change", (e) => {
+  const file = e.target.files && e.target.files[0]; if (!file) return;
+  const url = URL.createObjectURL(file), im = new Image();
+  im.onload = () => {
+    // 縦長 A4 の枠（620×877）に収まるよう縮める（はみ出す分は切らず、余白は白）
+    const W = 620, H = 877, c = document.createElement("canvas"); c.width = W; c.height = H;
+    const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+    const k = Math.min(W / im.width, H / im.height), dw = im.width * k, dh = im.height * k;
+    ctx.drawImage(im, (W - dw) / 2, (H - dh) / 2, dw, dh); URL.revokeObjectURL(url);
+    const data = c.toDataURL("image/jpeg", 0.86);
+    try { localStorage.setItem(CLUB_POSTER_KEY, data); }
+    catch (err) { $("poster-state").textContent = "保存できませんでした（ブラウザの保存の容量・設定）"; return; }
+    $("poster-state").textContent = "保存しました。読み込み直します…";
+    setTimeout(() => location.reload(), 600);
+  };
+  im.onerror = () => { URL.revokeObjectURL(url); $("poster-state").textContent = "この画像は読み込めませんでした（JPEG か PNG を選んでください）"; };
+  im.src = url;
+});
+$("btn-poster-clear").addEventListener("click", () => {
+  try { localStorage.removeItem(CLUB_POSTER_KEY); } catch (e) { /* もう消えている */ }
+  $("poster-state").textContent = "外しました。読み込み直します…";
+  setTimeout(() => location.reload(), 600);
+});
+refreshPosterUI();
 function applyKidsText() {   // 学祭モードの案内の出し入れと、短めコースのやさしいことば（絵は1フレームに1枚ずつ描き直す）
   KID.on = FEST && FEST_LEN === 3; HINT.on = FEST;
   DESK_ITEMS.group.visible = !FEST;   // 学祭モードでは机の忘れ物を置かない（確かめる物を減らす。小物の異変は学祭では出ない）
