@@ -484,7 +484,7 @@ details.comfortd { margin: 6px 0 2px; }
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 
 // 版：Quest のブラウザが古いページを出したままのことがあるので、タイトルと VR の「はじめる前に」に小さく出す（10/29）。更新のたびに書き換える
-const BUILD = "2026-10-30e";
+const BUILD = "2026-11-02a";
 document.getElementById("build-tag").textContent = "版 " + BUILD;
 
 // ============================================================================
@@ -4633,9 +4633,16 @@ function stopKnock() {
   if (PASS.kind === "knock") { PASS.kind = null; PASS.step = 0; }
 }
 // VR のコントローラーを振動させる（両手）
+// 1本のコントローラーを振動させる。Quest のブラウザの版によって使える仕組みが違うので、両方を試す（11/02：通知書で振動しなかった）
+function padPulse(gp, strength, ms) {
+  if (!gp) return;
+  let done = false;
+  try { const h = gp.hapticActuators && gp.hapticActuators[0]; if (h && h.pulse) { h.pulse(strength, ms); done = true; } } catch (e) { /* この仕組みは使えない */ }
+  if (!done) { try { gp.vibrationActuator?.playEffect?.("dual-rumble", { duration: ms, strongMagnitude: strength, weakMagnitude: strength }); } catch (e) { /* 振動できない機種 */ } }
+}
 function vrPulse(strength, ms) {
   const ses = renderer.xr.getSession && renderer.xr.getSession(); if (!ses) return;
-  for (const src of ses.inputSources) { try { src.gamepad?.hapticActuators?.[0]?.pulse(strength, ms); } catch (e) { /* 振動できない機種 */ } }
+  for (const src of ses.inputSources) padPulse(src.gamepad, strength, ms);
 }
 function resetPassage() { stopKnock(); PASS.kind = null; PASS.t = 0; PASS.step = 0; PASS.gate = null; lampMat.color.setHex(0xeef7ef); }
 function updatePassage(dt) {
@@ -4765,7 +4772,7 @@ function endClimax() {
 // ============================================================================
 const SEAT_VIEW = { x: TIER_X0 + (NT - 2) * D + 0.5 + 0.55, z: -8 };   // 最後列、プリントの置かれた机の席
 const SEATED_EYE = 1.15;
-const STORY = { steps: null, i: 0, t: 0, done: null, seated: false, woke: false, lid: 0, lidTarget: 0, lidRate: 3, tint: null, pitchTarget: null, shake: 0 };
+const STORY = { startedAt: 0, steps: null, i: 0, t: 0, done: null, seated: false, woke: false, lid: 0, lidTarget: 0, lidRate: 3, tint: null, pitchTarget: null, shake: 0 };
 // 肩をゆすられる揺れ（PCのみ。VRでは酔うので揺らさない）
 function shakeShoulder(sec = 0.7) { STORY.shake = sec; noiseHit(420, 1.0, 0.1, 0.12); noiseHit(380, 1.0, 0.09, 0.12, 0.22); }
 const lidMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthTest: false, depthWrite: false, fog: false });
@@ -4820,8 +4827,22 @@ function friendVoice(text) {
   }
   o.start(t0); o.stop(t + 0.3);
 }
+// VR のトリガーを離したとき（select）。テストからも呼べるよう関数にした
+function onVrSelectEvent(src) {
+  if (src && src._dashUsed) { src._dashUsed = false; if (state.mode === "play" || state.mode === "epilogue" || state.mode === "intro") return; }   // 走るのに使った左トリガー
+  if (state.mode === "intro" || state.mode === "epilogue") {
+    const t0 = src && src._selStart || 0;
+    if (t0 > STORY.startedAt + 400) skipStory();   // 場面が始まる前（または直後）から押していたトリガーでは飛ばさない
+    return;
+  }
+  if (state.mode === "ending") { if (performance.now() - CERT.shownAt > 2500) vrNextPlayer(); return; }   // クリア後は次の人の設定画面へ
+  if (vrSelect()) return;
+  if (state.mode !== "play") return;
+  if (nearHandout() || (vrHandout && vrHandout.visible)) toggleVrHandout();
+  else if (nearExit()) openExit();
+}
 function runStory(mode, steps, done) {
-  state.mode = mode; keys.clear(); sprint = false;
+  state.mode = mode; keys.clear(); sprint = false; STORY.startedAt = performance.now();
   Object.assign(STORY, { steps, i: 0, t: 0, done, pitchTarget: null });
   $("hud").hidden = true; $("prompt").hidden = true; promptShown = false;
   $("skip-hint").hidden = renderer.xr.isPresenting;
@@ -5077,7 +5098,7 @@ function showVrCert(info) {
     // 手のひらの上に、顔のほうへ傾けて持つ
     CERT.mesh.position.set(grip.userData.hand === "right" ? -0.02 : 0.02, 0.07, -0.13); CERT.mesh.rotation.set(-0.55, 0, 0);
     const src = renderer.xr.getSession()?.inputSources ? [...renderer.xr.getSession().inputSources].find(s => s.handedness === grip.userData.hand) : null;
-    try { src?.gamepad?.hapticActuators?.[0]?.pulse(0.4, 120); } catch (e) { /* 振動できない機種 */ }
+    padPulse(src?.gamepad, 0.9, 220); setTimeout(() => padPulse(src?.gamepad, 0.6, 160), 380);   // 紙が手に出てきた合図（2回。11/02 に強く）
   } else { camera.add(CERT.mesh); CERT.mesh.position.set(0, -0.12, -0.45); CERT.mesh.rotation.set(-0.2, 0, 0); }
   CERT.mesh.visible = true; CERT.t = 0; CERT.shownAt = performance.now(); CERT.mesh.scale.set(1, 0.05, 1);
   vrMessage(grip ? "手の中に、紙がある" : "ポケットに、紙が入っていた");
@@ -5152,14 +5173,15 @@ function updateCtrlHint() {
   const vrOn = on && vr && !!grip && !(CERT.mesh && CERT.mesh.visible);
   if (vrOn && !CTRL_HINT.mesh) {
     CTRL_HINT.tex = canvasTex(640, 384, () => {}, { clampS: true, clampT: true });
-    CTRL_HINT.mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.13, 0.078), new THREE.MeshBasicMaterial({ map: CTRL_HINT.tex, transparent: true, depthTest: false, fog: false }));
-    CTRL_HINT.mesh.renderOrder = 13;
+    CTRL_HINT.mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.12), new THREE.MeshBasicMaterial({ map: CTRL_HINT.tex, transparent: true, depthTest: false, fog: false }));
+    CTRL_HINT.mesh.renderOrder = 31;   // 11/02：0.13×0.078m → 0.2×0.12m（手元を見下ろしても読めるように大きく）。手元を見ると目の前の字幕と重なるので、札を上に描く
   }
   if (CTRL_HINT.mesh) {
     if (vrOn) {
       if (CTRL_HINT.mesh.parent !== grip) {
         grip.add(CTRL_HINT.mesh);
-        CTRL_HINT.mesh.position.set(0, 0.13, 0.0); CTRL_HINT.mesh.rotation.set(-0.45, 0, 0);   // 10/30 作者「もっと上の方でもいい」：コントローラーの13cm上に、ほぼ起こして
+        // 11/02 作者「脇をしめて持つと見えない。腕を伸ばすと見える」→ 手元を見下ろしたときに読めるよう、コントローラーのすぐ上に、顔のほうへ上向きに寝かせる
+        CTRL_HINT.mesh.position.set(0, 0.06, 0.04); CTRL_HINT.mesh.rotation.set(-1.25, 0, 0);
       }
       const vk = KID.on ? "kid" : "std";
       if (vk !== CTRL_HINT.vrKey) { CTRL_HINT.vrKey = vk; drawCtrlHintCard(); }
@@ -5244,14 +5266,16 @@ function comfortPulse(sec) { comfortHold = Math.max(comfortHold, sec); }
 const RING = (() => {
   const t = canvasTex(512, 512, (ctx, w, h) => {
     ctx.clearRect(0, 0, w, h); ctx.translate(w / 2, h / 2);
-    ctx.strokeStyle = "rgba(225,235,228,0.9)"; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(0, 0, 200, 0, Math.PI * 2); ctx.stroke();
-    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(225,235,228,0.45)"; ctx.beginPath(); ctx.arc(0, 0, 150, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = "rgba(225,235,228,0.9)"; ctx.lineWidth = 9; ctx.beginPath(); ctx.arc(0, 0, 200, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 4; ctx.strokeStyle = "rgba(225,235,228,0.45)"; ctx.beginPath(); ctx.arc(0, 0, 150, 0, Math.PI * 2); ctx.stroke();
     // 目盛り（12本）と、前を示す小さな三角：向きを変えたとき、景色だけが回って輪が止まっているのが分かる
     for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6; ctx.lineWidth = i % 3 ? 4 : 7; ctx.strokeStyle = "rgba(225,235,228,0.85)"; ctx.beginPath(); ctx.moveTo(Math.sin(a) * 182, -Math.cos(a) * 182); ctx.lineTo(Math.sin(a) * 222, -Math.cos(a) * 222); ctx.stroke(); }
     ctx.fillStyle = "rgba(225,235,228,0.9)"; ctx.beginPath(); ctx.moveTo(0, -246); ctx.lineTo(-16, -226); ctx.lineTo(16, -226); ctx.closePath(); ctx.fill();
   }, { clampS: true, clampT: true });
-  const mat = new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: 0, depthTest: false, depthWrite: false, fog: false });
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), mat);
+  //  11/02：直径1.1m では、真下を見ないと気づかなかった（作者）→ 直径3.6m に。前を見て歩くと視界の下の端に入る（目の高さ1.6m から約40°下）。
+  //  大きくしたので、壁や机の向こうに透けて見えないよう、ふつうに奥行きで隠れるようにした（床より少し上に置く）
+  const mat = new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: 0, depthTest: true, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 3.6), mat);
   mesh.rotation.x = -Math.PI / 2; mesh.position.y = 0.03; mesh.renderOrder = 3; mesh.visible = false;
   rig.add(mesh);
   return { mesh, mat, hold: 0 };
@@ -5260,7 +5284,7 @@ const _rh = new THREE.Vector3();
 function updateRing(dt, moving) {
   const on = COMFORT.ring && renderer.xr.isPresenting && state.mode === "play" && !LOBBY.on;
   RING.hold = moving || comfortHold > 0 ? 0.6 : Math.max(0, RING.hold - dt);   // 動きが止まってから0.6秒で消え始める
-  const target = on && RING.hold > 0 ? 0.32 : 0;
+  const target = on && RING.hold > 0 ? 0.5 : 0;   // 11/02：0.32 → 0.5（気づきにくかった）
   RING.mat.opacity += (target - RING.mat.opacity) * Math.min(1, dt * 5);
   RING.mesh.visible = RING.mat.opacity > 0.01;
   if (RING.mesh.visible) {   // 輪の真ん中は頭の真下（rig の中で頭が動いても足もとに）。向きは rig のまま
@@ -5770,16 +5794,10 @@ $("btn-vr").addEventListener("click", async () => {
     if (!ok) { fail("この端末ではVRを開始できません。Quest 3 のブラウザで単体版のページを開いてください。"); return; }
     const session = await navigator.xr.requestSession("immersive-vr", { optionalFeatures: ["local-floor", "bounded-floor"] });
     state.diff = readDiff(); resetRun(); applyXrScale(); await renderer.xr.setSession(session);
-    session.addEventListener("select", (ev) => {
-      const src = ev && ev.inputSource;
-      if (src && src.handedness === "left" && src._dashUsed && state.mode === "play") { src._dashUsed = false; return; }   // 走るのに使った左トリガー
-      if (state.mode === "intro" || state.mode === "epilogue") { skipStory(); return; }
-      if (state.mode === "ending") { if (performance.now() - CERT.shownAt > 2500) vrNextPlayer(); return; }   // クリア後は次の人の設定画面へ
-      if (vrSelect()) return;
-      if (state.mode !== "play") return;
-      if (nearHandout() || (vrHandout && vrHandout.visible)) toggleVrHandout();
-      else if (nearExit()) openExit();
-    });
+    // トリガーを押し始めた時刻（11/02：走ったまま前扉から出て左トリガーを離すと、その「離した」で終わりの場面が飛ばされ、
+    //  友達との会話がなくなっていた（作者の報告）→ 物語は、場面が始まってから押し始めたトリガーでしか飛ばさない）
+    session.addEventListener("selectstart", (ev) => { if (ev && ev.inputSource) ev.inputSource._selStart = performance.now(); });
+    session.addEventListener("select", (ev) => onVrSelectEvent(ev && ev.inputSource));
     show(null); vrNote.hidden = true;
     setQuality(0); resetPlayerSettings(); enterLobby();   // VRでは、真っ暗な入口でタイトルを見せ、コース・酔い対策を選んでから講義室へ（設定は次の人に引き継がない）
     session.addEventListener("end", () => {
@@ -6374,7 +6392,7 @@ function resize() {
 addEventListener("resize", resize);
 
 // テスト用フック
-window.__fl = {
+window.__fl = { onVrSelectEvent, STORY,
   CLUB_POSTER, campusTex,
   vrMenuGo, VR_PAUSE_KINDS,
   RING, updateRing, feelingSick, COMFORT_SICK, COMFORT_DEFAULT, smoothFloor, followFloor, EYE_VSPEED,
