@@ -484,8 +484,14 @@ details.comfortd { margin: 6px 0 2px; }
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 
 // 版：Quest のブラウザが古いページを出したままのことがあるので、タイトルと VR の「はじめる前に」に小さく出す（10/29）。更新のたびに書き換える
-const BUILD = "2026-11-02a";
+const BUILD = "2026-11-05a";
 document.getElementById("build-tag").textContent = "版 " + BUILD;
+// ネットがない会場でも開けるように（11/05）：公開ページ（https）だけ、sw.js を登録する。
+//  sw.js は「まずネットから最新を取りに行き、つながらない・4秒たっても返事がないときだけ、前に開いたときの控えを出す」。
+//  なので、ネットがあるときはいつも通り最新の版が出る（古い版が残り続けることはない）。PC のファイル版（file://）では何もしない。
+if (location.protocol === "https:" && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => { /* 使えないブラウザ */ }); });
+}
 
 // ============================================================================
 //  1. 間取り
@@ -5266,16 +5272,18 @@ function comfortPulse(sec) { comfortHold = Math.max(comfortHold, sec); }
 const RING = (() => {
   const t = canvasTex(512, 512, (ctx, w, h) => {
     ctx.clearRect(0, 0, w, h); ctx.translate(w / 2, h / 2);
-    ctx.strokeStyle = "rgba(225,235,228,0.9)"; ctx.lineWidth = 9; ctx.beginPath(); ctx.arc(0, 0, 200, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = "rgba(225,235,228,0.9)"; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(0, 0, 200, 0, Math.PI * 2); ctx.stroke();
     ctx.lineWidth = 4; ctx.strokeStyle = "rgba(225,235,228,0.45)"; ctx.beginPath(); ctx.arc(0, 0, 150, 0, Math.PI * 2); ctx.stroke();
     // 目盛り（12本）と、前を示す小さな三角：向きを変えたとき、景色だけが回って輪が止まっているのが分かる
     for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6; ctx.lineWidth = i % 3 ? 4 : 7; ctx.strokeStyle = "rgba(225,235,228,0.85)"; ctx.beginPath(); ctx.moveTo(Math.sin(a) * 182, -Math.cos(a) * 182); ctx.lineTo(Math.sin(a) * 222, -Math.cos(a) * 222); ctx.stroke(); }
     ctx.fillStyle = "rgba(225,235,228,0.9)"; ctx.beginPath(); ctx.moveTo(0, -246); ctx.lineTo(-16, -226); ctx.lineTo(16, -226); ctx.closePath(); ctx.fill();
   }, { clampS: true, clampT: true });
-  //  11/02：直径1.1m では、真下を見ないと気づかなかった（作者）→ 直径3.6m に。前を見て歩くと視界の下の端に入る（目の高さ1.6m から約40°下）。
+  //  11/02：直径1.1m では、真下を見ないと気づかなかった（作者）→ 板を 3.6m に。
+  //  11/05：それでも「少し下を見ないと見えない」（作者）。板 3.6m では太い線の半径が 1.4m（目の高さ1.6m から約49°下）で、
+  //  Quest の視界の下の端（約40°）より外だった → 板を 6.2m に（太い線の半径 2.4m＝約34°下、前の三角は約3m 先＝約28°下）。前を見て歩くだけで視界の下の方に入る。
   //  大きくしたので、壁や机の向こうに透けて見えないよう、ふつうに奥行きで隠れるようにした（床より少し上に置く）
   const mat = new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: 0, depthTest: true, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 3.6), mat);
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(6.2, 6.2), mat);
   mesh.rotation.x = -Math.PI / 2; mesh.position.y = 0.03; mesh.renderOrder = 3; mesh.visible = false;
   rig.add(mesh);
   return { mesh, mat, hold: 0 };
