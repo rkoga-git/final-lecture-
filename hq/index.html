@@ -393,8 +393,8 @@ details.comfortd { margin: 6px 0 2px; }
         <div class="actions"><button id="btn-records" type="button">プレイ記録</button></div>
       </details>
       <div class="keys">
-        PC：<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動　マウス 視点　<kbd>Shift</kbd> ダッシュ切替　<kbd>E</kbd> 調べる・非常口を開ける　<kbd>R</kbd> ルールと操作　<kbd>Esc</kbd> 一時停止　<kbd>F2</kbd> デバッグ<br>
-        Quest：左スティック 移動　右スティック 向きを変える　トリガー 調べる　Y ルールと操作　X 一時停止・設定
+        PC：<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動　マウス 視点　<kbd>Shift</kbd> ダッシュ切替　<kbd>E</kbd> 非常口を開ける　<kbd>R</kbd> ルールと操作　<kbd>Esc</kbd> 一時停止　<kbd>F2</kbd> デバッグ<br>
+        Quest：左スティック 移動　右スティック 向きを変える　トリガー 非常口を開ける　Y ルールと操作　X 一時停止・設定
       </div>
       <div class="note" id="vr-note" hidden></div>
       <div class="build" id="build-tag"></div>
@@ -493,7 +493,7 @@ details.comfortd { margin: 6px 0 2px; }
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 
 // 版：Quest のブラウザが古いページを出したままのことがあるので、タイトルと VR の「はじめる前に」に小さく出す（10/29）。更新のたびに書き換える
-const BUILD = "2026-11-11a";
+const BUILD = "2026-11-12a";
 document.getElementById("build-tag").textContent = "版 " + BUILD;
 // ネットがない会場でも開けるように（11/05）：公開ページ（https）だけ、sw.js を登録する。
 //  sw.js は「まずネットから最新を取りに行き、つながらない・4秒たっても返事がないときだけ、前に開いたときの控えを出す」。
@@ -5166,12 +5166,13 @@ function hideVrCert() { if (CERT.mesh) CERT.mesh.visible = false; }
 
 // ---- 操作のメモ（10/29 午後 遊んだ人「画面の端に基本的な操作がいつも出ているとわかりやすい」）----
 //  学祭モードで遊んでいる間だけ（ふだんのモードは雰囲気を優先して出さない。案内板と同じ考え方）。
+//  11/12 作者：トリガーで「調べる」場面は実質 非常口だけなので、表示は「非常口を開ける」と言い切る（掲示は E／トリガーでも読めるまま）
 //  PC は画面の左下、VR は左手のコントローラーの上の小さな札（手元を見れば読める。前を向いているときは異変探しの邪魔にならない）
 const CTRL_HINT = {
-  pc: [["WASD", "移動"], ["マウス", "見回す"], ["E", "調べる・非常口を開ける"], ["R", "ルール"], ["Esc", "一時停止"]],
-  pcKid: [["WASD", "あるく"], ["マウス", "まわりを見る"], ["E", "しらべる"], ["R", "ルール"], ["Esc", "とめる"]],
-  vr: [["左スティック", "歩く"], ["＋左トリガー", "走る"], ["右スティック", "向きを変える"], ["トリガー", "調べる・非常口を開ける"], ["Y", "ルール"], ["X", "メニュー"]],
-  vrKid: [["左スティック", "あるく"], ["＋左トリガー", "はしる"], ["右スティック", "むきを かえる"], ["トリガー", "しらべる"], ["Y", "ルール"], ["X", "メニュー"]],
+  pc: [["WASD", "移動"], ["マウス", "見回す"], ["E", "非常口を開ける"], ["R", "ルール"], ["Esc", "一時停止"]],
+  pcKid: [["WASD", "あるく"], ["マウス", "まわりを見る"], ["E", "ひじょうぐちを あける"], ["R", "ルール"], ["Esc", "とめる"]],
+  vr: [["左スティック", "歩く"], ["＋左トリガー", "走る"], ["右スティック", "向きを変える"], ["トリガー", "非常口を開ける"], ["Y", "ルール"], ["X", "メニュー"]],
+  vrKid: [["左スティック", "あるく"], ["＋左トリガー", "はしる"], ["右スティック", "むきを かえる"], ["トリガー", "ひじょうぐちを あける"], ["Y", "ルール"], ["X", "メニュー"]],
   shownKey: "", mesh: null, tex: null, vrKey: ""
 };
 function ctrlHintRows(vr) { return vr ? (KID.on ? CTRL_HINT.vrKid : CTRL_HINT.vr) : (KID.on ? CTRL_HINT.pcKid : CTRL_HINT.pc); }
@@ -5399,14 +5400,14 @@ function drawGuide(ctx, w, h) {
   const ops = vr ? [
     ["左スティック", "歩く"],
     ["右スティック", COMFORT.turn === "snap" ? "向きを変える（30°ずつ）" : "向きを変える"],
-    ["トリガー", "調べる・非常口を開ける"],
+    ["トリガー", "非常口を開ける"],
     ["歩きながら左トリガー", COMFORT.dash ? "走る（握っている間）" : "走る（設定でオフ）"],
     ["Y／B ボタン", "この紙をもう一度見る"],
     ["X／A ボタン", "一時停止・設定"]
   ] : [
     ["W A S D", "歩く"],
     ["マウス", "見回す"],
-    ["E", "調べる・非常口を開ける"],
+    ["E", "非常口を開ける"],
     ["Shift", COMFORT.dash ? "ダッシュの切り替え" : "ダッシュ（設定でオフ）"],
     ["R", "この紙をもう一度見る"],
     ["Esc", "一時停止・設定"]
